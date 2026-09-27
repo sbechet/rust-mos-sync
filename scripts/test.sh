@@ -122,17 +122,19 @@ tier_size() {
     for p in $(programs); do
         elf="$WORK/test-programs/target/$sim_target/release/$p"
         [ -f "$elf" ] || { fail "size: $elf missing"; continue; }
-        # llvm-size may not recognize the mos-sim output as an ELF object
-        # (the platform can load a raw memory image rather than one); that is
-        # a llvm-size/platform mismatch, not a build or test failure, so skip
-        # this program's measurement instead of aborting the whole run.
+        # llvm-size understands ELF/COFF/Mach-O/archives; some MOS platforms
+        # (mos-sim confirmed) link a raw memory image for their loader
+        # instead (no ELF magic at all - checked with `od`), which is not a
+        # format bug, just not an object file. Total size on disk is then the
+        # direct, honest measurement: the loader header is a few bytes, the
+        # rest is exactly the code+data that gets loaded.
         local n
-        if ! n=$(llvm-size -A "$elf" 2>"$WORK/llvm-size-$p.err" \
-                | awk '$1 ~ /^\.(text|rodata|data)/ {s += $2} END {print s + 0}'); then
-            skip "size: $p (llvm-size: $(cat "$WORK/llvm-size-$p.err"))"
-            continue
+        if n=$(llvm-size -A "$elf" 2>/dev/null \
+                | awk '$1 ~ /^\.(text|rodata|data)/ {s += $2} END {print s + 0}') && [ "$n" -gt 0 ]; then
+            sizes+=("$p=$n")
+        else
+            sizes+=("$p=$(stat -c %s "$elf")")
         fi
-        sizes+=("$p=$n")
     done
     [ ${#sizes[@]} -eq 0 ] && { skip "size: no program could be measured"; return; }
     local rc=0

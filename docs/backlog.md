@@ -70,13 +70,18 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
   otherwise leave it - not worth a patch on its own.
 - `llvm-size`/`llvm-readelf` from the SDK refuse every `mos-sim` binary
   ("not recognized as a valid object file"), Rust or plain C alike (checked
-  with a trivial `int main(void) { return 0; }` compiled by `mos-sim-clang`):
-  the `sim` platform's link step produces a raw memory image, not an ELF, for
-  `mos-sim` to load directly - the tools are simply the wrong ones for this
-  platform's output, not a bug. `test.sh`'s size tier (§9 tier 4) now skips a
-  program's measurement on such a failure instead of aborting the whole run.
-  A real platform to size-check (`mos-c64-none`, an actual ELF) is still
-  useful; add one once its `.cfg` and runtime story are worked out.
+  with a trivial `int main(void) { return 0; }` compiled by `mos-sim-clang`).
+  Confirmed with `od`: the file has no ELF magic at all (`00 02 24 00 a9 f0
+  85 00 ...` - straight 6502 opcodes, `a9 f0` = `LDA #$F0`, behind what looks
+  like a small load-address/length header). The `sim` platform's link step
+  emits a raw memory image for `mos-sim` to load directly, not an ELF - the
+  tools are simply the wrong ones for this platform's output, nothing to
+  patch in `llvm-size`, and no LLVM/rustc gap either. `test.sh`'s size tier
+  (§9 tier 4) now falls back to the size of the file on disk in that case,
+  which for this format *is* the direct code+data measurement (header
+  overhead: a few bytes). A platform that links a real ELF (`mos-c64-none`,
+  once its `.cfg` and runtime story are worked out) would let the section
+  breakdown (`.text`/`.rodata`/`.data` separately) work too.
 
 ## Regression tests to add to tests/programs
 
