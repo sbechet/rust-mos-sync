@@ -24,11 +24,6 @@ jobs = @JOBS@
 [rust]
 channel = "@CHANNEL@"
 debuginfo-level = 0
-# Building from source (not a dist tarball) makes bootstrap deny warnings by
-# default. We are not rust-lang/rust's own zero-warnings CI: pre-existing,
-# non-MOS warnings in the library sources (e.g. an unused variable only on
-# some host/target combination) must not block an otherwise working build.
-deny-warnings = false
 # rustc uses the rust-lang LLVM branch + MOS patch, never a CI LLVM.
 download-rustc = false
 lld = false
