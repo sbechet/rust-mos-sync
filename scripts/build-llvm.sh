@@ -116,8 +116,13 @@ keep_going=()
 ninja -C "$build" -j "$JOBS" "${keep_going[@]}" install >"$WORK/llvm-build.log" 2>&1 \
     || { tail -60 "$WORK/llvm-build.log" >&2; die "LLVM build failed"; }
 
-# lit and its helpers are needed by test.sh tier 1 even from the cache.
-ninja -C "$build" -j "$JOBS" FileCheck count not llvm-lit >>"$WORK/llvm-build.log" 2>&1
+# FileCheck/count/not are real compiled tools test.sh tier 1 needs; llvm-lit
+# itself is a script CMake writes at configure time, not a ninja target (a
+# stray `ninja llvm-lit` fails with "unknown target"), so it is not built,
+# only checked for. Non-fatal: test.sh already skips tier 1 if it's missing.
+ninja -C "$build" -j "$JOBS" FileCheck count not >>"$WORK/llvm-build.log" 2>&1 \
+    || warn "could not build FileCheck/count/not, tier 1 (lit) will be skipped"
+[ -f "$build/bin/llvm-lit" ] || warn "$build/bin/llvm-lit not found, tier 1 (lit) will be skipped"
 printf '%s\n' "commit=$commit" "patches=$patches_hash" "$config" > "$prefix/.complete"
 log "LLVM installed in $prefix"
 echo "$prefix"

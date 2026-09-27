@@ -5,8 +5,11 @@
 set -uo pipefail
 for f in "$@"; do
     [ -s "$f" ] || continue
-    # Error lines with a little context, else the tail of the log.
-    body=$(grep -n -iE -B2 -A6 '(^|[^a-z])(error|FAILED|failed|panicked|undefined reference|No such file)' "$f" | head -c 3500)
+    # Real diagnostic markers, not just the substring "error" (which also
+    # matches harmless filenames like Error.cpp.o, ErrorHandling.cpp.o...).
+    body=$(grep -n -E -B2 -A6 \
+        ': error:|^FAILED:|ninja: (error|build stopped)|undefined reference|No such file or directory|panicked at|Segmentation fault|core dumped|^error\[' \
+        "$f" | tail -c 3500)
     [ -n "$body" ] || body=$(tail -c 3500 "$f")
     body=${body//'%'/'%25'}; body=${body//$'\r'/}; body=${body//$'\n'/'%0A'}
     echo "::error title=$(basename "$f")::$body"
