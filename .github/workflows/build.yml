@@ -29,7 +29,8 @@ permissions:
 
 concurrency:
   group: build-${{ github.ref }}-${{ inputs.channel || 'stable' }}
-  cancel-in-progress: true
+  # A new push waits for the running build instead of killing hours of work.
+  cancel-in-progress: false
 
 env:
   CHANNEL: ${{ inputs.channel || 'stable' }}
@@ -118,6 +119,10 @@ jobs:
           compression-level: 0
           retention-days: 3
 
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/llvm-cmake.log work/llvm-build.log work/test-report.txt
+
       - name: Logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -161,6 +166,10 @@ jobs:
 
       - name: Test tiers 2-5
         run: scripts/test.sh std run size smoke
+
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/rust-build.log work/test-programs.log work/smoke.log work/test-report.txt
 
       - name: Package toolchain
         if: always()
