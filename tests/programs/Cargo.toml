@@ -1,0 +1,13 @@
+# Test programs run on mos-sim by scripts/test.sh (PLAN.md §9, tier 3).
+# Each member has expected.stdout and expected.exit next to its Cargo.toml.
+[workspace]
+resolver = "3"
+members = ["hello"]
+
+[profile.dev]
+panic = "abort"
+opt-level = "s"
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
