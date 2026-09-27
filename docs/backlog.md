@@ -83,6 +83,22 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
   once its `.cfg` and runtime story are worked out) would let the section
   breakdown (`.text`/`.rodata`/`.data` separately) work too.
 
+## Notes from other in-progress MOS projects on this machine
+
+- **Custom C64 linker scripts**: the SDK's `mos-c64-clang` only omits its own
+  default `-Tlink.ld` when it sees a `-T` on the *clang* command line, not a
+  linker-only `-Wl,-T,...` (`MOSToolChain::addClangTargetOptions` /
+  `mos::Linker::ConstructJob`) — the latter leaves both scripts active
+  ("region 'ram' already defined"). From Rust:
+  `rustflags = ["-C", "link-arg=-T", "-C", "link-arg=<script>.ld"]`. Relevant
+  to any program that reclaims part of `link.ld`'s default `$0801-$CFFF`
+  (e.g. hi-mem $A000-$BFFF) for itself. Worth a line in the README/docs once
+  we document custom platforms.
+- **`core::fmt` code size**: a couple of `write!`s with `{:02}`/`{:?}` cost
+  about 2 KB on a C64-budget (`$0801-$9FFF`) program — worth watching in tier
+  4 once `tests/programs` exercises formatting (none do yet; `hello` only
+  calls `putchar` directly).
+
 ## Regression tests to add to tests/programs
 
 Add them one at a time. An item known to fail upstream goes in as an expected
