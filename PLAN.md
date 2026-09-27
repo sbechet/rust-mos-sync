@@ -2,7 +2,7 @@
 
 This document is written for **Claude Code**. It describes the goal, the architecture and the implementation phases of `rust-mos-sync`, a project that keeps a Rust toolchain for the MOS 6502 family permanently in sync with **Rust stable**, using the **llvm-mos** backend.
 
-The project is hosted on **Codeberg** (Forgejo). CI uses **Forgejo Actions** on **self-hosted runners**. Do not assume GitHub-specific features (GitHub Actions marketplace, `gh` CLI, GitHub API).
+The project is hosted on **GitHub**. CI uses **GitHub Actions** on GitHub-hosted runners (a self-hosted runner can be added later, see §11). Binaries are published as GitHub releases and container images on `ghcr.io` (see `docs/git-and-distribution.md`). The design stays *patches, not forks* (§2): GitHub forks of this repository are welcome, and patched upstream branches may be published for browsing, but they are always regenerated from `patches/`.
 
 When something in this plan is ambiguous or conflicts with reality (e.g. an upstream layout changed), stop and ask the maintainer rather than guessing.
 
@@ -68,10 +68,11 @@ rust-mos-sync/
 │   ├── dist.sh
 │   ├── regen-patches.sh     # re-export patch series from work trees
 │   ├── detect.sh            # compare upstream state with versions.toml
-│   └── forgejo.sh           # PR / issue / release helpers via Forgejo API
+│   └── github.sh            # PR / issue / release helpers via the `gh` CLI
 ├── ci/
 │   └── claude/              # prompts used by CI for Claude Code
-└── .forgejo/
+├── docker/                  # Dockerfile of the ready-to-use MOS toolchain image
+└── .github/
     └── workflows/
         ├── watch.yml
         ├── sync-rust.yml
@@ -127,9 +128,9 @@ Specifics:
 - `test.sh`: runs the test tiers of §9; writes a JUnit-style or plain summary to `work/test-report.txt`.
 - `regen-patches.sh <llvm|rust>`: regenerates the series with `git format-patch --no-numbered --zero-commit --no-signature` so diffs between regenerations stay minimal.
 
-## 7. Workflows (Forgejo Actions)
+## 7. Workflows (GitHub Actions)
 
-Workflow files live in `.forgejo/workflows/`. Syntax is close to GitHub Actions but check Forgejo compatibility for every action used; prefer plain `run:` steps over third-party actions. All heavy jobs run on the self-hosted label `mos-builder`.
+Workflow files live in `.github/workflows/`. Prefer plain `run:` steps over third-party actions (only official `actions/*` ones). Heavy jobs run on GitHub-hosted `ubuntu-24.04` runners (4 vCPU, 16 GB RAM, ~14 GB free disk, 6 h per job): each workflow first frees disk space, and the build is split into jobs (LLVM, rustc, dist) that pass the LLVM install through the LLVM cache (§11) so no job exceeds 6 h.
 
 ### 7.1 `watch.yml` — detection (cron, daily)
 
@@ -145,7 +146,7 @@ Workflow files live in `.forgejo/workflows/`. Syntax is close to GitHub Actions 
 1. Fetch the new Rust tag; `apply.sh rust <tag>`.
 2. On exit `2`, run Claude Code (§8) with `ci/claude/resolve-rust.md`.
 3. Build LLVM (cache hit expected), SDK, Rust; run tests.
-4. Update `versions.toml`, regenerate patches, open a PR on Codeberg with the test summary.
+4. Update `versions.toml`, regenerate patches, open a PR with the test summary.
 
 ### 7.3 `sync-mos-backend.yml`
 
@@ -168,12 +169,13 @@ Triggered on merge to `main` when `versions.toml` changed.
 
 1. `dist.sh`: `x.py dist` for each host (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin` if a macOS runner is available).
 2. Version string: `<rust-version>-mos.<N>`.
-3. Publish as a Codeberg release (Forgejo releases API) plus checksums. Provide `install.sh` that unpacks and runs `rustup toolchain link mos-stable <path>` (and `mos-beta`).
-4. Later phase: generate rustup channel manifests to support `RUSTUP_DIST_SERVER`.
+3. Publish as a GitHub release (`gh release create`) plus checksums. Provide `install.sh` that unpacks and runs `rustup toolchain link mos-stable <path>` (and `mos-beta`).
+4. Build and push the Docker image (`docker/`, toolchain + llvm-mos SDK, ready for `cargo build --target mos-c64-none`) to `ghcr.io`, tagged `<rust-version>-mos.<N>` and `stable`/`beta`.
+5. Later phase: generate rustup channel manifests to support `RUSTUP_DIST_SERVER`.
 
 ## 8. Claude Code in CI
 
-Claude Code is invoked **only** when a patch series does not apply or a build fails after applying. It runs in headless mode (`claude -p`) on the self-hosted runner, with the API key stored as a Forgejo secret.
+Claude Code is invoked **only** when a patch series does not apply or a build fails after applying. It runs in headless mode (`claude -p`) on the runner, with the API key stored as a GitHub Actions secret.
 
 Guardrails:
 
@@ -204,10 +206,11 @@ A richer test suite is what makes auto-merge safe; grow `tests/programs/` over t
 
 ## 11. Infrastructure
 
-- Codeberg's hosted CI resources are not sized for LLVM + rustc builds; use a **self-hosted `forgejo-runner`** registered to the repo with label `mos-builder`. Check Codeberg's current CI policy before setup.
-- Recommended runner: 16+ cores, 64 GB RAM, 300 GB SSD.
-- Persistent cache directory on the runner for LLVM builds (keyed as in §3) and `sccache` for rustc. Optionally mirror LLVM build tarballs to a generic package registry for disaster recovery (check size limits).
-- Upstream sources (on GitHub) are fetched with plain `git`; no GitHub API usage.
+- GitHub-hosted runners (free for public repositories) are the default: `ubuntu-24.04` for x86_64 Linux, `ubuntu-24.04-arm` for aarch64 Linux, `macos-14` for aarch64 macOS. Free disk space first (remove preinstalled SDKs) and respect the 6 h job limit.
+- A self-hosted runner with label `mos-builder` is optional (e.g. the maintainer's machine); workflows must work on both.
+- LLVM installs are cached by key (§3.4) as assets of a dedicated release `llvm-cache` of this repository (durable, plain HTTPS download); the GitHub Actions cache is only a short-lived speed-up on top. `sccache` for rustc where useful.
+- Upstream sources are fetched with plain `git`; the GitHub API (through `gh`) is used only for this repository (PRs, issues, releases).
+- Storage and retention of binaries: see `docs/git-and-distribution.md`.
 
 ## 12. Implementation phases
 
@@ -222,7 +225,7 @@ Implement all scripts of §6 and the test tiers of §9.
 *Done when:* on a clean machine, `fetch → apply → build-llvm → build-sdk → build-rust → test → dist` succeeds with no manual step.
 
 **Phase 3 — CI for Rust syncs and releases.**
-Runner setup, `watch.yml`, `sync-rust.yml`, `release.yml`, `forgejo.sh`.
+`watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
 *Done when:* a new Rust point release produces a PR and, after merge, a published toolchain without intervention (Claude Code not yet enabled).
 
 **Phase 4 — MOS backend sync.**

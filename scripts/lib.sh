@@ -15,7 +15,7 @@ EXIT_ERROR=1
 EXIT_CONFLICT=2
 EXIT_TEST=3
 
-# Upstream remotes (plain git, no GitHub API — PLAN.md §11)
+# Upstream remotes, fetched with plain git (PLAN.md §11)
 RUST_URL="${RUST_URL:-https://github.com/rust-lang/rust.git}"
 RUST_LLVM_URL="${RUST_LLVM_URL:-https://github.com/rust-lang/llvm-project.git}"
 LLVM_MOS_URL="${LLVM_MOS_URL:-https://github.com/llvm-mos/llvm-mos.git}"

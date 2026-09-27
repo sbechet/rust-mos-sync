@@ -1,15 +1,16 @@
 # Git hosting and binary distribution
 
-Status: **proposal**, to be applied once Phase 1 works (a toolchain built by the
+Status: **accepted in principle** (hosting on GitHub, decided by the maintainer on
+2026-09-27); details to be applied once Phase 1 works (a toolchain built by the
 scripts runs `tests/programs/hello` on `mos-sim`). Complements PLAN.md §7.5,
-§10 and §11; PLAN.md will be updated to point here once accepted.
+§10 and §11.
 
 Two separate problems:
 
 1. **Git**: where the recipe (patches, scripts, config, `versions.toml`) lives.
 2. **Binaries**: how users, CI and a rebuilt machine get toolchains and
    intermediate builds without recompiling (LLVM ≈ 6–7 h and rustc ≈ 3–5 h on
-   the current 2-core builder).
+   the maintainer's 2-core machine, roughly half that on a GitHub runner).
 
 ## 1. Git
 
@@ -17,7 +18,7 @@ Two separate problems:
 
 | In git | Not in git |
 |---|---|
-| `patches/`, `scripts/`, `config/`, `targets/`, `tests/`, `ci/`, `.forgejo/`, `versions.toml`, docs | `work/` (upstream checkouts, build trees), `cache/` (LLVM installs, SDK), any binary |
+| `patches/`, `scripts/`, `config/`, `targets/`, `tests/`, `ci/`, `docker/`, `.github/`, `versions.toml`, docs | `work/` (upstream checkouts, build trees), `cache/` (LLVM installs, SDK), any binary |
 
 Upstream sources (rust-lang/rust, rust-lang/llvm-project, llvm-mos) are never
 mirrored: they are fetched by `scripts/fetch.sh` at the commits pinned in
@@ -30,73 +31,71 @@ growth stays small. No Git LFS.
 
 ### 1.2 Hosting
 
-- Repository `rust-mos-sync` on Codeberg, under the maintainer's account (or an
-  organisation if others join later). Public, licence to be chosen (the patches
-  are derived from Apache-2.0 WITH LLVM-exception / MIT+Apache-2.0 code; the
-  scripts can use MIT OR Apache-2.0 like Rust).
-- Push over SSH from the builder with a key **dedicated** to this repo (Codeberg
-  deploy key with write access) rather than the maintainer's personal key.
+- Public repository `rust-mos-sync` on GitHub, under the maintainer's account or
+  an organisation. Licence to be chosen (the patches derive from
+  Apache-2.0 WITH LLVM-exception and MIT/Apache-2.0 code; the scripts can use
+  MIT OR Apache-2.0 like Rust).
+- Pushes from the maintainer's machine use a **deploy key** with write access,
+  dedicated to this repository. CI uses the workflow's `GITHUB_TOKEN`.
 - The `origin` remote is added once the repository exists; nothing is pushed
   before the maintainer confirms.
 
-### 1.3 Branches and tags
+### 1.3 Forks and upstream
 
-- `main`: always buildable; changes land through pull requests once CI exists
-  (Phase 3). Until then the maintainer pushes directly.
+- Anyone can fork this repository and follow it like any GitHub project; the
+  recipe is small and has no binary.
+- **Patches, not forks** (PLAN.md §2) still holds for Rust and LLVM: updating to
+  a new upstream means re-applying `patches/` on the new upstream commit, which
+  is what makes the updates automatic.
+- For convenience, the release workflow may push the patched trees as branches
+  of GitHub forks (`<owner>/rust` branch `mos-1.98.1`, `<owner>/llvm-project`
+  branch `mos-rustc-22.1`) so the code can be browsed and linked. These branches
+  are **generated** (force-pushed from `patches/`), never edited by hand.
+
+### 1.4 Branches and tags
+
+- `main`: always buildable; protected once CI exists (Phase 3): changes land
+  through pull requests with required checks. Until then the maintainer pushes
+  directly.
 - `sync/rust-<version>`, `sync/mos-<date>`, `bump/llvm-<NN.N>`: branches opened
   by the workflows (PLAN.md §7), deleted after merge.
 - Release tags: `v<rust-version>-mos.<N>` (e.g. `v1.98.1-mos.1`) on the `main`
   commit that produced the published binaries. Beta: `v1.99.0-beta-mos.<N>`.
-  The tag, and the `release.json` published with the binaries (see 2.2), link the
-  binaries to the exact recipe.
 
-### 1.4 Commit history
+### 1.5 Commit history
 
 Small commits `<area>: <summary>` (PLAN.md §13). The initial local history
 (Phase 1) is kept as is: it documents how the first MOS patch was obtained.
 
 ## 2. Binaries
 
-Three kinds of artefacts, with different audiences and lifetimes:
-
-| Artefact | Who uses it | Size (xz, per host) | Kept |
+| Artefact | Who uses it | Where | Kept |
 |---|---|---|---|
-| **Toolchain** (rustc + libLLVM, cargo, rust-std host + MOS, rust-src) | users | ≈ 150–200 MB, to measure | current stable + beta, plus the previous stable |
-| **LLVM install** (`cache/llvm/<key>`) | builder / CI / rebuilds | ≈ 80–120 MB, to measure | keys referenced by `versions.toml` (stable + beta) |
-| **llvm-mos SDK** | users and builder | 100 MB | not re-hosted: the official release pinned in `versions.toml` |
+| **Toolchain** (rustc + libLLVM, cargo, rust-std host + MOS, rust-src) | users | GitHub release `v<version>-mos.<N>` | all releases (the last few stable/beta advertised) |
+| **Docker image** (toolchain + llvm-mos SDK) | users, CI of MOS projects | `ghcr.io/<owner>/rust-mos` | all tags; `stable` / `beta` move |
+| **LLVM install** (`cache/llvm/<key>`) | this repo's CI, rebuilt machines | assets of the release `llvm-cache` | keys referenced by `versions.toml` + the previous ones |
+| **llvm-mos SDK** | users and CI | not re-hosted: official release pinned in `versions.toml` | — |
 
-Sizes must be measured on the first real build and this table updated.
+Sizes are to be measured on the first real build (estimate: toolchain
+≈ 150–200 MB xz per host, LLVM install ≈ 80–120 MB, image ≈ 1 GB uncompressed).
+GitHub release assets may be up to 2 GiB each; there is no practical total
+quota for a public repository, so no aggressive rotation is needed.
 
-### 2.1 Storage and Codeberg quota
+### 2.1 Toolchain releases
 
-Codeberg allows **1.5 GiB of packages + LFS + release attachments** per user
-before a resource request is needed (750 MiB for git). With the sizes above:
-
-- 3 toolchains × 1 host ≈ 0.6 GB, plus 2 LLVM installs ≈ 0.2 GB: this fits for **one
-  host (x86_64 Linux)**, but only with rotation.
-- As soon as a second host (aarch64 Linux, macOS) is added, the limit is
-  exceeded. At that point, either submit a request to
-  `codeberg.org/Codeberg-e.V./requests` (preferred: explain the project and the
-  rotation), or move the storage to another host (see 2.5).
-
-Rotation is therefore part of the design from the start: `scripts/forgejo.sh
-prune` deletes releases and packages that are no longer kept (table above).
-
-### 2.2 Toolchain releases (users)
-
-Produced by `scripts/dist.sh` (`x.py dist`) and published by `release.yml` as a
-**Codeberg release** attached to the tag `v<version>-mos.<N>`:
+Produced by `scripts/dist.sh` (`x.py dist`) and published by `release.yml` with
+`gh release create v<version>-mos.<N>`:
 
 ```
-rust-mos-1.98.1-mos.1-x86_64-unknown-linux-gnu.tar.xz   # combined toolchain
+rust-mos-1.98.1-mos.1-x86_64-unknown-linux-gnu.tar.xz
 rust-mos-1.98.1-mos.1-x86_64-unknown-linux-gnu.tar.xz.sha256
 release.json      # repo commit, rust tag, llvm commit, patch hashes, SDK release
 install.sh
 ```
 
-- One combined tarball per host instead of the separate `x.py dist`
-  components: easier to install, and a single file to rotate.
-- `install.sh` (runs locally, no build):
+- One combined tarball per host rather than the separate `x.py dist`
+  components: easier to install.
+- `install.sh` (runs locally, compiles nothing):
   1. download and verify the tarball (sha256);
   2. download the pinned llvm-mos SDK release if missing (its linkers and
      `mos-sim` are needed);
@@ -104,57 +103,64 @@ install.sh
   4. `rustup toolchain link mos-stable <dir>` (or `mos-beta`);
   5. print the `PATH` addition for the SDK `bin/`.
   Usage: `cargo +mos-stable build --release --target mos-c64-none`.
-- The toolchain contains no `std` for MOS targets, only `core`, `alloc` and
-  `compiler_builtins` (PLAN.md §3.2).
-- Later (PLAN.md §7.5 step 4, Phase 7): rustup channel manifests so that
+- MOS targets ship only `core`, `alloc` and `compiler_builtins` (PLAN.md §3.2).
+- Later (Phase 7): rustup channel manifests served from the releases so that
   `RUSTUP_DIST_SERVER=… rustup toolchain install` works directly.
 
-### 2.3 LLVM installs (builder, CI, disaster recovery)
+### 2.2 Docker image
 
-The expensive part is LLVM, and it only changes with an LLVM bump or a MOS
-backend sync. Its cache key (Rust LLVM commit + hash of `patches/llvm/` +
-configuration) is already computed by `build-llvm.sh`.
+`docker/Dockerfile`, built by `release.yml` from the release assets (no
+compilation in the image build), pushed to `ghcr.io/<owner>/rust-mos`:
 
-- After a successful build, `build-llvm.sh` (or the workflow) uploads
-  `cache/llvm/<key>` as a tarball to the **Codeberg generic package registry**:
-  `packages/generic/rust-mos-llvm/<key>/llvm-<key>-<host>.tar.xz`.
-- On a local cache miss, `build-llvm.sh` first tries to download that package
-  (plain HTTPS, no API token needed for a public repo), and only compiles when it
-  is absent.
-- The installs are built with `LLVM_LINK_LLVM_DYLIB`, so they are relocatable:
-  unpacking them to another path works.
-- The lit tests (tier 1) need the LLVM build tree, not the install; when LLVM
-  comes from the package, tier 1 was already run when the package was produced
-  and is reported as `SKIP` (already the case in `test.sh`).
+- base `debian:trixie-slim`;
+- the rust-mos toolchain, set as the default rustup toolchain;
+- the pinned llvm-mos SDK in `PATH` (`mos-c64-clang` etc. as linkers, the C
+  runtime, `mos-sim`);
+- tags `1.98.1-mos.1`, `stable`, `beta`; `linux/amd64` first, `linux/arm64`
+  once the aarch64 toolchain exists.
 
-Result: a Rust-only update (the most frequent case) rebuilds only rustc
-(≈ 3–5 h here), and a new or reinstalled builder does not recompile LLVM.
+Usage:
+
+```sh
+docker run --rm -v "$PWD":/src -w /src ghcr.io/<owner>/rust-mos:stable \
+    cargo build --release --target mos-c64-none
+# -> target/mos-c64-none/release/<name> (a .prg loadable in VICE or on a C64)
+```
+
+A minimal C64 example (text on screen) goes into `tests/programs/` and is used
+to smoke-test the image.
+
+### 2.3 LLVM installs (not recompiling LLVM)
+
+LLVM only changes with an LLVM bump or a MOS backend sync. Its cache key (Rust
+LLVM commit + hash of `patches/llvm/` + configuration) is computed by
+`build-llvm.sh`.
+
+- After a successful build, the workflow uploads `cache/llvm/<key>` as
+  `llvm-<key>-<host>.tar.xz` to the release `llvm-cache`
+  (`gh release upload llvm-cache …`).
+- On a local cache miss, `build-llvm.sh` first downloads
+  `https://github.com/<owner>/rust-mos-sync/releases/download/llvm-cache/llvm-<key>-<host>.tar.xz`
+  (plain HTTPS, no token), and only compiles when it is absent.
+- Installs use `LLVM_LINK_LLVM_DYLIB`, so they are relocatable.
+- Tier 1 (lit) needs the LLVM build tree: it runs in the job that builds LLVM;
+  when LLVM comes from the cache, tier 1 reports `SKIP` (already the case in
+  `test.sh`).
+
+Result: a Rust-only update (the most frequent case) rebuilds only rustc, and a
+new machine or runner never recompiles LLVM.
 
 ### 2.4 rustc builds
 
-rustc cannot be reused from one Rust version to the next. To avoid rebuilding
-the *same* version:
-
-- the published toolchain (2.2) is the reference: re-running tests or dist for a
-  version already released downloads it instead of rebuilding;
-- `sccache` on the builder (PLAN.md §11) speeds up the C/C++ parts and repeated
-  builds of the same version after a failed step.
-
-### 2.5 Fallback if Codeberg storage is not enough
-
-Keep the same URL layout on another static HTTPS host (the maintainer's own
-server, or S3-compatible object storage behind a domain name). The scripts take
-the base URLs from variables in `scripts/lib.sh` (`DIST_BASE_URL`,
-`LLVM_CACHE_URL`), so switching hosts only changes configuration, not code.
+rustc cannot be reused across Rust versions. For the same version, the
+published toolchain is the reference (re-running tests or the Docker build
+downloads it), and `sccache` helps repeated builds after a failed step.
 
 ## 3. Open questions for the maintainer
 
-1. Codeberg account or organisation name, and repository name (`rust-mos-sync`?).
+1. GitHub account or organisation, and repository name (`rust-mos-sync`?).
 2. Licence of the repository.
-3. Initial hosts to publish: x86_64 Linux only for now (the builder), or aarch64 /
-   macOS later?
-4. The builder has 2 cores: should it also be the Forgejo runner (Phase 3)? A
-   Rust-only sync would take ≈ 4–6 h, which is acceptable for a daily cron but
-   not for fast iteration.
-5. Is it acceptable to request more storage from Codeberg, or should a
-   personal server be used for the binaries?
+3. Hosts: x86_64 Linux first, then aarch64 Linux and aarch64 macOS (GitHub
+   provides free runners for all three)?
+4. Keep the maintainer's machine as an optional self-hosted runner, or GitHub
+   runners only?
