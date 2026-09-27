@@ -20,6 +20,7 @@ RUST_URL="${RUST_URL:-https://github.com/rust-lang/rust.git}"
 RUST_LLVM_URL="${RUST_LLVM_URL:-https://github.com/rust-lang/llvm-project.git}"
 LLVM_MOS_URL="${LLVM_MOS_URL:-https://github.com/llvm-mos/llvm-mos.git}"
 LLVM_MOS_SDK_URL="${LLVM_MOS_SDK_URL:-https://github.com/llvm-mos/llvm-mos-sdk.git}"
+LLVM_MOS_SDK_URL_RELEASES="${LLVM_MOS_SDK_URL_RELEASES:-https://github.com/llvm-mos/llvm-mos-sdk/releases}"
 
 # Parallelism: default to the number of cores; link jobs are kept low because
 # linking LLVM is memory bound.
