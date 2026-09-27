@@ -58,8 +58,9 @@ PY
 
 export PATH="$sdk/bin:$PATH"
 cd "$src"
-targets_args=()
-for t in $MOS_TARGETS; do targets_args+=(--target "$t"); done
+# bootstrap's --target takes one comma-separated list, not a repeated flag
+# (clap: "the argument '--target <TARGET>' cannot be used multiple times").
+targets_args=(--target "$(echo "$MOS_TARGETS" | tr ' ' ',')")
 
 log "building rustc + cargo (stage $STAGE) — log: $WORK/rust-build.log"
 ./x build --stage "$STAGE" -j "$JOBS" compiler/rustc library/std src/tools/cargo \
