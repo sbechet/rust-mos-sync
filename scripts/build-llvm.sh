@@ -1,42 +1,82 @@
 #!/usr/bin/env bash
-# build-llvm.sh [<channel>]
+# build-llvm.sh [--key|--package] [<channel>]
 #
-# Builds the patched LLVM ($WORK/llvm-project, branch `mos`) and installs it in
-# $CACHE/llvm/<key>, where <key> hashes the Rust LLVM commit, the patch series
-# and the build configuration (PLAN.md §3.4). A cache hit skips the build.
-# Prints the install prefix on stdout.
+# Provides the patched LLVM in $CACHE/llvm/<key>, where <key> hashes the Rust
+# LLVM commit, the patch series and the build configuration (PLAN.md §3.4),
+# and prints that prefix. In order:
+#   1. local cache hit;
+#   2. download of llvm-<key>-<host>.tar.xz from $LLVM_CACHE_URL (the
+#      `llvm-cache` release of the GitHub repository);
+#   3. build of $WORK/llvm-project (branch `mos`, see apply.sh).
+# --key      only print the key.
+# --package  write $WORK/llvm-<key>-<host>.tar.xz from the local install and
+#            print its path (for upload to the llvm-cache release).
 #
 # Environment:
-#   LLVM_PROJECTS   default "clang;lld" (PLAN.md §6)
-#   JOBS            compile jobs (default: nproc); LINK_JOBS default 1
+#   LLVM_PROJECTS    default "" (clang and lld come from the llvm-mos SDK)
+#   LLVM_NO_DOWNLOAD set to 1 to skip step 2
+#   JOBS             compile jobs (default: nproc); LINK_JOBS default 1
 . "$(dirname "$0")/lib.sh"
-need git cmake ninja python3 sha256sum
+need python3 sha256sum
 
+mode=build
+case "${1:-}" in --key) mode=key; shift ;; --package) mode=package; shift ;; esac
 channel="${1:-stable}"
 src="$WORK/llvm-project"
 build="$WORK/llvm-build"
 commit=$(ver_get "rust.$channel.llvm_commit")
-[ -d "$src/.git" ] || die "$src missing; run fetch.sh llvm and apply.sh llvm first"
+host=$(host_triple)
 
 # MOS is an experimental target in llvm-mos: it must go through
 # LLVM_EXPERIMENTAL_TARGETS_TO_BUILD, not LLVM_TARGETS_TO_BUILD.
 targets="X86"
 case "$(uname -m)" in aarch64|arm64) targets="X86;AArch64" ;; esac
 experimental="MOS"
-projects="${LLVM_PROJECTS-clang;lld}"
+projects="${LLVM_PROJECTS-}"
 LINK_JOBS="${LINK_JOBS:-1}"
 
 # Everything that influences the produced binaries goes into the key.
-config="targets=$targets experimental=$experimental projects=$projects host=$(host_triple)"
+config="targets=$targets experimental=$experimental projects=$projects host=$host"
 patches_hash=$(cat "$ROOT"/patches/llvm/*.patch 2>/dev/null | sha256sum | cut -c1-16)
 key="$(printf '%s\n%s\n%s\n' "$commit" "$patches_hash" "$config" | sha256sum | cut -c1-16)"
 prefix="$CACHE/llvm/$key"
+asset="llvm-$key-$host.tar.xz"
+
+case "$mode" in
+    key) echo "$key"; exit 0 ;;
+    package)
+        [ -f "$prefix/.complete" ] || die "no complete LLVM install for key $key"
+        need tar xz
+        tar -C "$prefix" -cf - . | xz -T0 -6 > "$WORK/$asset.tmp"
+        mv "$WORK/$asset.tmp" "$WORK/$asset"
+        log "packaged $WORK/$asset ($(du -h "$WORK/$asset" | cut -f1))"
+        echo "$WORK/$asset"; exit 0 ;;
+esac
 
 if [ -f "$prefix/.complete" ]; then
     log "LLVM cache hit: $prefix"
     echo "$prefix"
     exit 0
 fi
+
+if [ "${LLVM_NO_DOWNLOAD:-0}" != 1 ] && command -v curl >/dev/null; then
+    log "trying $LLVM_CACHE_URL/$asset"
+    mkdir -p "$CACHE/llvm"
+    if curl -sSfL --retry 3 -o "$CACHE/llvm/$asset" "$LLVM_CACHE_URL/$asset" 2>/dev/null; then
+        rm -rf "$prefix.tmp"; mkdir -p "$prefix.tmp"
+        tar -xJf "$CACHE/llvm/$asset" -C "$prefix.tmp"
+        rm -f "$CACHE/llvm/$asset"
+        [ -f "$prefix.tmp/.complete" ] || die "downloaded $asset is incomplete"
+        rm -rf "$prefix"; mv "$prefix.tmp" "$prefix"
+        log "LLVM downloaded into $prefix"
+        echo "$prefix"
+        exit 0
+    fi
+    log "not in the LLVM cache release, building"
+fi
+
+need git cmake ninja
+[ -d "$src/.git" ] || die "$src missing; run fetch.sh llvm and apply.sh llvm first"
 
 # The work tree must hold exactly base + series; otherwise the key lies.
 head_patches=$(git -C "$src" rev-list --count "$commit..mos" 2>/dev/null || echo x)

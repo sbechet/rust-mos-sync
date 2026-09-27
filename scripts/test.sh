@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test.sh [<toolchain-dir>] [tier...]
+# test.sh [<toolchain-dir>] [tier...]    tiers: llvm std run size smoke
 #
 # Runs the test tiers of PLAN.md §9 against a toolchain directory (a sysroot
 # with bin/rustc; default: the latest stage built in $WORK/rust). Tiers:
@@ -14,20 +14,26 @@
 need python3
 
 host=$(host_triple)
-toolchain="${1:-}"
-[ $# -gt 0 ] && shift
+toolchain=""
+if [ $# -gt 0 ] && [ -d "$1" ]; then toolchain="$1"; shift; fi
+tiers=("$@")
+[ ${#tiers[@]} -gt 0 ] || tiers=(llvm std run size smoke)
+
+# Every tier but llvm needs the Rust toolchain.
+needs_rustc=0
+for t in "${tiers[@]}"; do [ "$t" = llvm ] || needs_rustc=1; done
 if [ -z "$toolchain" ]; then
     for s in 2 1; do
         [ -x "$WORK/rust/build/$host/stage$s/bin/rustc" ] && { toolchain="$WORK/rust/build/$host/stage$s"; break; }
     done
 fi
-[ -x "$toolchain/bin/rustc" ] || die "no toolchain found (pass its directory)"
-tiers=("$@")
-[ ${#tiers[@]} -gt 0 ] || tiers=(llvm std run size smoke)
+if [ "$needs_rustc" = 1 ]; then
+    [ -x "$toolchain/bin/rustc" ] || die "no toolchain found (pass its directory)"
+fi
 
 sdk=$("$ROOT/scripts/build-sdk.sh")
 export PATH="$sdk/bin:$PATH"
-export RUSTC="$toolchain/bin/rustc"
+[ "$needs_rustc" = 0 ] || export RUSTC="$toolchain/bin/rustc"
 CARGO="${CARGO:-cargo}"
 SIZE_THRESHOLD="${SIZE_THRESHOLD:-5}"
 sim_target=mos-sim-none
@@ -158,7 +164,7 @@ EOF
     fi
 }
 
-log "toolchain $toolchain ($("$RUSTC" --version))"
+[ "$needs_rustc" = 0 ] || log "toolchain $toolchain ($("$RUSTC" --version))"
 for t in "${tiers[@]}"; do "tier_$t"; done
 
 log "$(grep -c '^PASS' "$report") passed, $failed failed — $report"

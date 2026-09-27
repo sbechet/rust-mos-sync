@@ -22,6 +22,11 @@ LLVM_MOS_URL="${LLVM_MOS_URL:-https://github.com/llvm-mos/llvm-mos.git}"
 LLVM_MOS_SDK_URL="${LLVM_MOS_SDK_URL:-https://github.com/llvm-mos/llvm-mos-sdk.git}"
 LLVM_MOS_SDK_URL_RELEASES="${LLVM_MOS_SDK_URL_RELEASES:-https://github.com/llvm-mos/llvm-mos-sdk/releases}"
 
+# This repository on GitHub; LLVM installs are cached as assets of its
+# `llvm-cache` release (docs/git-and-distribution.md §2.3).
+GITHUB_REPO="${GITHUB_REPO:-sbechet/rust-mos-sync}"
+LLVM_CACHE_URL="${LLVM_CACHE_URL:-https://github.com/$GITHUB_REPO/releases/download/llvm-cache}"
+
 # Parallelism: default to the number of cores; link jobs are kept low because
 # linking LLVM is memory bound.
 JOBS="${JOBS:-$(nproc)}"

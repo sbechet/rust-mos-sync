@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 14:27:48 +0000
+Subject: [PATCH] bootstrap: accept the MOS targets unknown to stage0
+
+---
+ src/bootstrap/src/core/sanity.rs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/bootstrap/src/core/sanity.rs b/src/bootstrap/src/core/sanity.rs
+index 99d9c8a04c5c12f89fa21c88be04777ea68b8ffd..c9c343aaa3bea6d0338885dedb8c06cd1c32556e 100644
+--- a/src/bootstrap/src/core/sanity.rs
++++ b/src/bootstrap/src/core/sanity.rs
+@@ -41,6 +41,10 @@ pub struct Finder {
+     "aarch64-unknown-linux-pauthtest", // Stage 0 compiler is not guaranteed to see the target yet.
+     "aarch64-unknown-qnx",
+     "x86_64-pc-qnx",
++    // MOS targets are added by rust-mos-sync; no upstream stage0 knows them.
++    "mos-unknown-none",
++    "mos-sim-none",
++    "mos-c64-none",
+ ];
+ 
+ /// Minimum version threshold for libstdc++ required when using prebuilt LLVM

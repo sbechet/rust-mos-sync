@@ -51,7 +51,8 @@ for t in targets:
              f'cxx = "{sdk}/bin/mos-clang++"\n'
              f'ar = "{sdk}/bin/llvm-ar"\n'
              f'ranlib = "{sdk}/bin/llvm-ranlib"\n'
-             f'linker = "{sdk}/bin/{driver}"\n')
+             f'linker = "{sdk}/bin/{driver}"\n'
+             f'no-std = true\n')
 open(out, "w").write(text)
 PY
 
