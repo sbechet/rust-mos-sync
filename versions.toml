@@ -14,12 +14,15 @@ llvm_branch = "rustc/23.1-2026-07-22"
 llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
 
 [llvm_mos]
-base_merge = ""
+base_merge = "cdfebee3c9da537c00e74a650aa8fa5201a97c6f"   # upstream parent ecd2b6862c31
 last_synced = ""
 deferred = []
 
 [llvm_mos_sdk]
-commit = ""
+# Prebuilt release used for linking and mos-sim (scripts/build-sdk.sh).
+release = "v23.2.0"
+sha256 = "4d6c9f1833666261a3178906cef11d9544b0f3a8c238f9c288073a8055ae9e61"
+commit = "0eaa8d9762d02631346bdd90ddd67bcc851ad75e"
 
 [release]
 mos_revision = 1
