@@ -1,0 +1,25 @@
+# Single source of truth for the current state (PLAN.md §5).
+# Read and written only through scripts/lib.sh (ver_get / ver_set).
+
+[rust.stable]
+tag = "1.98.1"
+llvm_branch = "rustc/22.1-2026-05-19"
+llvm_commit = "52ed14fcd56afc30f9cccd8ca8ce237c2eef7e04"
+
+[rust.beta]
+# rust-lang/rust has no beta tags: beta is tracked by the `beta` branch head.
+tag = "1.99.0-beta"
+commit = "dfb0accb7f508ae8be965d8629557221c889dd98"
+llvm_branch = "rustc/23.1-2026-07-22"
+llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
+
+[llvm_mos]
+base_merge = ""
+last_synced = ""
+deferred = []
+
+[llvm_mos_sdk]
+commit = ""
+
+[release]
+mos_revision = 1
