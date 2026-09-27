@@ -67,7 +67,22 @@ failure, with a link to the upstream issue, so it does not block the pipeline.
 - float → int `as` casts (saturating `fptosi.sat`), gave wrong values
   (rust-mos#27, llvm-mos-sdk#299).
 - `u128` arithmetic and division (rust-mos#29: `G_UDIV s128` failed to
-  legalize; llvm-mos#236, #237).
+  legalize; llvm-mos#236, #237). **Fixed here**: hit for real building `core`
+  itself (`fmt::num::exp_u128`, i.e. `{}`-formatting a u128 — unconditionally
+  compiled, no way to avoid it by not using u128). The MOS legalizer clamped
+  G_SDIV/G_SREM/G_UDIV/G_UREM to a max of S64 before reaching the generic
+  `.libcall()` action, so S128 fell through unhandled; widened to S128
+  (`patches/llvm`, `MOSLegalizerInfo.cpp`) — the generic legalizer already
+  resolves S128 to the `__udivti3`/`__divti3`/`__umodti3`/`__modti3` libcalls
+  compiler_builtins provides. Regression test: format a large i128/u128.
+- `f16`/`f128` in `core`/`compiler_builtins` (not in the rust-mos-era backlog —
+  rustc now assumes `f16`/`f128` work everywhere unless denied per-target,
+  a mechanism rust-mos's older Rust predates). **Fixed here**:
+  `has_reliable_f16`/`has_reliable_f128`
+  in `rustc_codegen_llvm/src/llvm_util.rs` now return false for MOS
+  (`G_FCONSTANT half` does not legalize), so those routines are not compiled.
+  `f128` excluded proactively, unverified. Revisit if/when the backend gains
+  real support — this was a fast target-level opt-out, not a backend fix.
 - `u64::checked_mul` (llvm-mos#235, hang on `smul.with.overflow.i64`).
 - copies of small arrays and structs (rust-mos#25, vector legalization).
 - the same program at opt-level 0, 1, 2, 3, "s" and "z" (rust-mos#28: debug build
