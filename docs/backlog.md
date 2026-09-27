@@ -59,6 +59,16 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
    `--two-entry-phi-node-folding-threshold=0`, which current Clang no longer
    does. Re-check this list at every LLVM bump.
 
+## Cosmetic
+
+- Linking any MOS binary prints (to stderr, non-fatal):
+  `ld.lld: ...libcompiler_builtins-*.rlib: archive member 'lib.rmeta'
+  ('lib.rmeta-link') is neither ET_REL nor LLVM bitcode`. lld inspects every
+  member of the `.rlib` archive under `-flto` and complains about the two
+  that hold only Rust metadata, not object code or bitcode; harmless (the
+  link still succeeds), just noisy. Silence if it turns out to bother users,
+  otherwise leave it - not worth a patch on its own.
+
 ## Regression tests to add to tests/programs
 
 Add them one at a time. An item known to fail upstream goes in as an expected

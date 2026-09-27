@@ -120,7 +120,7 @@ tier_size() {
     if ! build_programs; then fail "size: cargo build failed"; return; fi
     local baseline="$ROOT/tests/size-baseline.json" p elf sizes=()
     for p in $(programs); do
-        elf="$WORK/test-programs/target/$sim_target/release/$p.elf"
+        elf="$WORK/test-programs/target/$sim_target/release/$p"
         [ -f "$elf" ] || { fail "size: $elf missing"; continue; }
         sizes+=("$p=$(llvm-size -A "$elf" | awk '$1 ~ /^\.(text|rodata|data)/ {s += $2} END {print s + 0}')")
     done
