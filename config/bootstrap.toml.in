@@ -1,0 +1,45 @@
+# Template rendered by scripts/build-rust.sh into $WORK/rust/bootstrap.toml.
+# Placeholders: @HOST@ @CHANNEL@ @LLVM_CONFIG@ @SDK@ @MOS_TARGETS@ @JOBS@
+change-id = "ignore"
+
+[llvm]
+download-ci-llvm = false
+
+[build]
+build = "@HOST@"
+host = ["@HOST@"]
+target = ["@HOST@", @MOS_TARGETS@]
+description = "mos"
+extended = true
+tools = ["cargo", "src"]
+docs = false
+compiler-docs = false
+locked-deps = true
+# compiler-rt C sources are not needed: MOS gets the Rust implementations.
+optimized-compiler-builtins = false
+profiler = false
+sanitizers = false
+jobs = @JOBS@
+
+[rust]
+channel = "@CHANNEL@"
+debuginfo-level = 0
+# rustc uses the rust-lang LLVM branch + MOS patch, never a CI LLVM.
+download-rustc = false
+lld = false
+llvm-tools = false
+llvm-bitcode-linker = false
+codegen-backends = ["llvm"]
+omit-git-hash = false
+
+[dist]
+compression-formats = ["xz"]
+
+[target.@HOST@]
+llvm-config = "@LLVM_CONFIG@"
+llvm-has-rust-patches = true
+
+# MOS targets (appended per target by build-rust.sh):
+#   [target.<mos-target>]
+#   cc = "@SDK@/bin/mos-clang"  ar = "@SDK@/bin/llvm-ar"  ranlib = "@SDK@/bin/llvm-ranlib"
+#   linker = "@SDK@/bin/mos-<vendor>-clang"
