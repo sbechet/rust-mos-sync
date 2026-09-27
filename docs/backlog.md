@@ -65,7 +65,21 @@ Add them one at a time. An item known to fail upstream goes in as an expected
 failure, with a link to the upstream issue, so it does not block the pipeline.
 
 - float → int `as` casts (saturating `fptosi.sat`), gave wrong values
-  (rust-mos#27, llvm-mos-sdk#299).
+  (rust-mos#27, llvm-mos-sdk#299). **Fixed here**: on our newer LLVM this is a
+  hard `unable to legalize instruction` at compile time rather than a silent
+  wrong result — `G_FPTOSI_SAT`/`G_FPTOUI_SAT` had no action definition at
+  all in the MOS legalizer. Hit building `compiler_builtins`'s libm
+  (`rem_pio2_large`), so also unavoidable as soon as any float math is
+  linked in. Fixed with `.lower()` (`patches/llvm`), which expands to the
+  regular (non-saturating) libcall plus comparisons/selects MOS already
+  legalizes. Regression test: `as` casts from f32/f64 to every int width,
+  including out-of-range and NaN values (the rust-mos#27 report).
+- three-way compare (`G_SCMP`/`G_UCMP`, not in the rust-mos-era backlog: a
+  newer GlobalISel opcode `core`'s exact float formatting now uses,
+  `flt2dec::strategy::dragon::format_exact`) had no action definition either,
+  same "unable to legalize" failure, unconditionally hit formatting any
+  float with `{}`. **Fixed here** with `.lower()` (`patches/llvm`), expanding
+  to `G_ICMP` + `G_SELECT` like the existing `G_SMIN`/`G_SMAX` handling.
 - `u128` arithmetic and division (rust-mos#29: `G_UDIV s128` failed to
   legalize; llvm-mos#236, #237). **Fixed here**: hit for real building `core`
   itself (`fmt::num::exp_u128`, i.e. `{}`-formatting a u128 — unconditionally

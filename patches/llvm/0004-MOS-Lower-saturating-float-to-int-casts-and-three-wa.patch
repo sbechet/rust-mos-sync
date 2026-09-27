@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 18:02:10 +0000
+Subject: [PATCH] [MOS] Lower saturating float-to-int casts and three-way
+ compare
+
+Neither G_FPTOSI_SAT/G_FPTOUI_SAT (Rust's `as` cast semantics since
+1.45; also used by compiler_builtins' libm, e.g. rem_pio2_large) nor
+G_SCMP/G_UCMP (three-way compare, used by core's exact float
+formatting, flt2dec::strategy::dragon::format_exact) had any action
+definition at all, so encountering either failed immediately with
+"unable to legalize instruction". Both have a generic `.lower()`
+expansion in LegalizerHelper (to regular fptosi/fptoui + compares/
+selects, and to G_ICMP + G_SELECT, respectively) built entirely out of
+opcodes MOS already legalizes - the same pattern already used here for
+G_SMIN/G_SMAX/G_UMIN/G_UMAX.
+---
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+index 3bc7a9364449de6bda4987e173192e0533cdabe2..d211add90172a39f873f12ba0b675cfa01188d91 100644
+--- a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+@@ -223,6 +223,10 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+ 
+   getActionDefinitionsBuilder({G_SMIN, G_SMAX, G_UMIN, G_UMAX}).lower();
+ 
++  // rust-mos-sync: three-way compare (`Ord::cmp`-style, used by core's exact
++  // float formatting); expands to G_ICMP + G_SELECT, both already legal.
++  getActionDefinitionsBuilder({G_SCMP, G_UCMP}).lower();
++
+   getActionDefinitionsBuilder(G_ABS).custom();
+ 
+   // Odd operations are handled via even ones: 6502 has only ADC/SBC.
+@@ -318,6 +322,11 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+       .libcallForCartesianProduct({S32, S64}, {S32, S64})
+       .minScalar(0, S32);
+ 
++  // rust-mos-sync: the saturating variants (Rust's `as` cast semantics since
++  // 1.45, and compiler_builtins' libm) have no MOS-specific handling; expand
++  // to the regular libcall above plus comparisons/selects, all already legal.
++  getActionDefinitionsBuilder({G_FPTOSI_SAT, G_FPTOUI_SAT}).lower();
++
+   getActionDefinitionsBuilder({G_SITOFP, G_UITOFP})
+       .libcallForCartesianProduct({S32, S64}, {S32, S64})
+       .minScalar(1, S32);
