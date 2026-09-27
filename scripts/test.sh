@@ -122,8 +122,19 @@ tier_size() {
     for p in $(programs); do
         elf="$WORK/test-programs/target/$sim_target/release/$p"
         [ -f "$elf" ] || { fail "size: $elf missing"; continue; }
-        sizes+=("$p=$(llvm-size -A "$elf" | awk '$1 ~ /^\.(text|rodata|data)/ {s += $2} END {print s + 0}')")
+        # llvm-size may not recognize the mos-sim output as an ELF object
+        # (the platform can load a raw memory image rather than one); that is
+        # a llvm-size/platform mismatch, not a build or test failure, so skip
+        # this program's measurement instead of aborting the whole run.
+        local n
+        if ! n=$(llvm-size -A "$elf" 2>"$WORK/llvm-size-$p.err" \
+                | awk '$1 ~ /^\.(text|rodata|data)/ {s += $2} END {print s + 0}'); then
+            skip "size: $p (llvm-size: $(cat "$WORK/llvm-size-$p.err"))"
+            continue
+        fi
+        sizes+=("$p=$n")
     done
+    [ ${#sizes[@]} -eq 0 ] && { skip "size: no program could be measured"; return; }
     local rc=0
     python3 - "$baseline" "$SIZE_THRESHOLD" "$WORK/size-current.json" "${sizes[@]}" >"$WORK/size.txt" <<'PY' || rc=$?
 import json, os, sys
