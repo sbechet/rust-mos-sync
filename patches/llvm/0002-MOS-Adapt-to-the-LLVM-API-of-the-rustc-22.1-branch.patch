@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 15:27:07 +0000
+Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/22.1 branch
+
+loadRegFromStackSlot gained an `unsigned SubReg` parameter between the
+llvm-mos base merge (upstream 2026-01-08) and the 22.x fork point. Same
+change as llvm-mos made in its next upstream merge (5ac7be35).
+---
+ llvm/lib/Target/MOS/MOSInstrInfo.cpp | 2 +-
+ llvm/lib/Target/MOS/MOSInstrInfo.h   | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.cpp b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
+index 5c5077fc9a3700ebd61b4f4803c1e31c3e545f86..610859023d8af68bacb9f3279aadf535cf7da988 100644
+--- a/llvm/lib/Target/MOS/MOSInstrInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
+@@ -822,7 +822,7 @@ void MOSInstrInfo::storeRegToStackSlot(
+ void MOSInstrInfo::loadRegFromStackSlot(
+     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register DestReg,
+     int FrameIndex, const TargetRegisterClass *RC, Register VReg,
+-    MachineInstr::MIFlag Flags) const {
++    unsigned /*SubReg*/, MachineInstr::MIFlag Flags) const {
+   loadStoreRegStackSlot(MBB, MI, DestReg, false, FrameIndex, RC, Flags,
+                         /*IsLoad=*/true);
+ }
+diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.h b/llvm/lib/Target/MOS/MOSInstrInfo.h
+index 12a05f86104456ad40df111e433aee0237111a91..debdb74e627d3fd862cfa94f2a2f296de0a45743 100644
+--- a/llvm/lib/Target/MOS/MOSInstrInfo.h
++++ b/llvm/lib/Target/MOS/MOSInstrInfo.h
+@@ -89,8 +89,8 @@ public:
+ 
+   void loadRegFromStackSlot(
+       MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register DestReg,
+-      int FrameIndex, const TargetRegisterClass *RC,
+-      Register VReg,
++      int FrameIndex, const TargetRegisterClass *RC, Register VReg,
++      unsigned SubReg = 0,
+       MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const override;
+ 
+   void loadStoreRegStackSlot(MachineBasicBlock &MBB,

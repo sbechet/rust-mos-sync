@@ -15,6 +15,7 @@
 # Environment:
 #   LLVM_PROJECTS    default "" (clang and lld come from the llvm-mos SDK)
 #   LLVM_NO_DOWNLOAD set to 1 to skip step 2
+#   LLVM_KEEP_GOING  set to 1 to let ninja report every failing file
 #   JOBS             compile jobs (default: nproc); LINK_JOBS default 1
 . "$(dirname "$0")/lib.sh"
 need python3 sha256sum
@@ -110,7 +111,9 @@ cmake -S "$src/llvm" -B "$build" -G Ninja \
     >"$WORK/llvm-cmake.log" 2>&1 || { tail -40 "$WORK/llvm-cmake.log" >&2; die "cmake failed"; }
 
 log "building LLVM with $JOBS jobs (log: $WORK/llvm-build.log)"
-ninja -C "$build" -j "$JOBS" install >"$WORK/llvm-build.log" 2>&1 \
+keep_going=()
+[ "${LLVM_KEEP_GOING:-0}" = 1 ] && keep_going=(-k 0)   # report every error at once (CI)
+ninja -C "$build" -j "$JOBS" "${keep_going[@]}" install >"$WORK/llvm-build.log" 2>&1 \
     || { tail -60 "$WORK/llvm-build.log" >&2; die "LLVM build failed"; }
 
 # lit and its helpers are needed by test.sh tier 1 even from the cache.

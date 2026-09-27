@@ -70,15 +70,13 @@ jobs:
         if: steps.key.outputs.cached != 'true'
         run: sudo apt-get update -q && sudo apt-get install -yq ninja-build lld ccache
 
-      - name: ccache
+      - name: Restore ccache
         if: steps.key.outputs.cached != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/ccache
-          key: ccache-llvm-${{ steps.key.outputs.key }}-${{ github.run_id }}
-          restore-keys: |
-            ccache-llvm-${{ steps.key.outputs.key }}-
-            ccache-llvm-
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ccache-llvm-
 
       - name: Fetch and patch LLVM
         if: steps.key.outputs.cached != 'true'
@@ -90,9 +88,18 @@ jobs:
         if: steps.key.outputs.cached != 'true'
         env:
           LLVM_NO_DOWNLOAD: "1"
+          LLVM_KEEP_GOING: "1"
           LINK_JOBS: "2"
           CCACHE_MAXSIZE: 3G
         run: scripts/build-llvm.sh "$CHANNEL"
+
+      # Saved even when the build fails, so the next attempt resumes from here.
+      - name: Save ccache
+        if: always() && steps.key.outputs.cached != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Test tier 1 (llvm-lit MOS)
         if: steps.key.outputs.cached != 'true'
