@@ -19,6 +19,20 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
 
 ## Actions
 
+0. **Upstream MOS support to `rust-lang/cc-rs`.** Bootstrap unconditionally
+   probes a C compiler for every configured target (even pure `no_std` ones,
+   `src/bootstrap/src/utils/cc_detect.rs`), through the `cc` crate, which
+   rejects any target triple whose architecture (first component) it does not
+   recognize. `mos` is not recognized (checked against `cc-rs` `main`,
+   2026-09-27; no open issue or PR). Discovered when `mos-sim-none` first went
+   through `x build`: not something rust-mos hit, since it never had a
+   built-in target sanity-checked by current bootstrap. Worked around for now
+   by vendoring a patched `cc` 1.2.28 in `src/bootstrap/cc-mos-vendor` (patch
+   0003), wired via `[patch.crates-io]`; drop it once a `mos` arch is
+   upstreamed (one match arm in `src/target/parser.rs::parse_arch`, same as
+   `avr`/`msp430`/`m68k`) and re-vendor whenever `src/bootstrap/Cargo.toml`'s
+   `cc = "=X.Y.Z"` pin changes at an LLVM/Rust bump.
+
 1. **More built-in platform targets.** The community uses `mos-<platform>-none`
    named after the SDK platform (vendor = platform, linker
    `mos-<platform>-clang`): most used `mos-c64-none` (done), `mos-sim-none`
