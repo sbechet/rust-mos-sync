@@ -63,7 +63,12 @@ cd "$src"
 targets_args=(--target "$(echo "$MOS_TARGETS" | tr ' ' ',')")
 
 log "building rustc + cargo (stage $STAGE) — log: $WORK/rust-build.log"
-./x build --stage "$STAGE" -j "$JOBS" compiler/rustc library/std src/tools/cargo \
+# Explicit --target: omitting it falls back to bootstrap.toml's [build]
+# target list (host + every MOS target, for the second command below), which
+# leaves the host's own rust-std uninstalled in the stage sysroot (no
+# libstd-*.rlib at all) - not usable for a build.rs or any other host binary
+# a downstream crate might need.
+./x build --stage "$STAGE" -j "$JOBS" compiler/rustc library/std src/tools/cargo --target "$host" \
     >"$WORK/rust-build.log" 2>&1 || { tail -60 "$WORK/rust-build.log" >&2; die "rustc build failed"; }
 
 log "building MOS core/alloc: $MOS_TARGETS"
