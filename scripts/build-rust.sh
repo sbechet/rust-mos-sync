@@ -62,18 +62,31 @@ cd "$src"
 # (clap: "the argument '--target <TARGET>' cannot be used multiple times").
 targets_args=(--target "$(echo "$MOS_TARGETS" | tr ' ' ',')")
 
+stage_dir="$src/build/$host/stage$STAGE"
+host_snapshot="$WORK/host-sysroot-snapshot"
+
 log "building rustc + cargo (stage $STAGE) — log: $WORK/rust-build.log"
-# Explicit --target: omitting it falls back to bootstrap.toml's [build]
-# target list (host + every MOS target, for the second command below), which
-# leaves the host's own rust-std uninstalled in the stage sysroot (no
-# libstd-*.rlib at all) - not usable for a build.rs or any other host binary
-# a downstream crate might need.
 ./x build --stage "$STAGE" -j "$JOBS" compiler/rustc library/std src/tools/cargo --target "$host" \
     >"$WORK/rust-build.log" 2>&1 || { tail -60 "$WORK/rust-build.log" >&2; die "rustc build failed"; }
+
+# bootstrap's Sysroot step unconditionally does `rm -rf` on the whole
+# stage$STAGE dir every time it re-assembles a compiler ("Removing sysroot
+# ... to avoid caching bugs", compiler.rs), which a later `./x build` for the
+# MOS-only targets below triggers again - wiping out everything this first
+# invocation just installed for the host (rustc/cargo still work, being
+# already loaded in memory by the shell that ran them, but libstd-*.rlib and
+# friends vanish from disk). Snapshot the host sysroot now and restore it
+# after the MOS build so the final package has both.
+rm -rf "$host_snapshot"
+mkdir -p "$host_snapshot"
+cp -a "$stage_dir/." "$host_snapshot/"
 
 log "building MOS core/alloc: $MOS_TARGETS"
 ./x build --stage "$STAGE" -j "$JOBS" library/alloc "${targets_args[@]}" \
     >>"$WORK/rust-build.log" 2>&1 || { tail -60 "$WORK/rust-build.log" >&2; die "MOS library build failed"; }
 
-log "toolchain ready in $src/build/$host/stage$STAGE"
-echo "$src/build/$host/stage$STAGE"
+log "restoring the host sysroot snapshot over $stage_dir"
+cp -a "$host_snapshot/." "$stage_dir/"
+
+log "toolchain ready in $stage_dir"
+echo "$stage_dir"

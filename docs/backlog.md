@@ -16,6 +16,21 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
 - Calling convention: we mirror llvm-mos Clang (`MOSABIInfo`) instead of
   rust-mos' "every aggregate indirect", which is better for C interop.
 - No cargo fork: rust-std is prebuilt, `-Z build-std` is not needed.
+- Host `rust-std` (`libstd-*.rlib`) surviving in the packaged toolchain
+  (needed for a downstream crate's `build.rs` or any other host binary;
+  reported by a sibling MOS project, c64-nokernal, hitting `E0463: can't find
+  crate for std`). Root cause: `src/bootstrap/src/core/build_steps/compile.rs`
+  `Sysroot::run` unconditionally does `fs::remove_dir_all(&sysroot)` on the
+  *entire* `stage$STAGE` directory every time it re-assembles a compiler
+  ("Removing sysroot ... to avoid caching bugs") - the second `./x build`
+  invocation (MOS-only targets) wipes what the first (host) just installed.
+  `build-rust.sh` now snapshots the host sysroot right after the host build
+  and restores it over the final directory after the MOS build, rather than
+  trusting the stage directory to accumulate across multiple invocations. A
+  real fix (using `x dist`/`x install`, bootstrap's own sanctioned mechanism
+  for producing a stable component bundle, instead of packaging its internal
+  working directory directly) is tracked as the still-inline `dist.sh`
+  item below.
 
 ## Actions
 
