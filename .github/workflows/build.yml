@@ -181,11 +181,11 @@ jobs:
       - name: Package toolchain
         if: always()
         run: |
-          host=x86_64-unknown-linux-gnu
-          dir="work/rust/build/$host/stage$STAGE"
-          [ -x "$dir/bin/rustc" ] || exit 0
-          cp "work/rust/build/$host/stage$STAGE-tools-bin/cargo" "$dir/bin/" 2>/dev/null || true
-          tar -C "$dir" -cJf "work/rust-mos-$CHANNEL-$host.tar.xz" .
+          # No rustc means an earlier step already failed and reported it;
+          # dist.sh itself failing here (rustc present but packaging broken)
+          # is a real problem and should fail this step.
+          [ -x "work/rust/build/x86_64-unknown-linux-gnu/stage$STAGE/bin/rustc" ] || exit 0
+          scripts/dist.sh "$CHANNEL"
 
       - name: Upload toolchain
         if: always()

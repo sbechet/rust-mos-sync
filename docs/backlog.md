@@ -29,8 +29,11 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
   trusting the stage directory to accumulate across multiple invocations. A
   real fix (using `x dist`/`x install`, bootstrap's own sanctioned mechanism
   for producing a stable component bundle, instead of packaging its internal
-  working directory directly) is tracked as the still-inline `dist.sh`
-  item below.
+  working directory directly) is a separate, larger follow-up: `x dist`
+  hard-codes stage 2 for some components (e.g. `rustc-dev`), which would give
+  up the STAGE=1 speed this pipeline relies on in CI, and needs real
+  validation for no_std MOS targets before it can replace the snapshot/
+  restore approach `scripts/dist.sh` uses now.
 
 ## Actions
 

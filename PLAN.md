@@ -228,13 +228,18 @@ patches beyond the extracted merge (an API adaptation, 128-bit div/rem,
 saturating float casts, three-way compare) and one target-level opt-out
 (f16/f128); see `docs/backlog.md`.
 
-**Phase 2 — Reproducible scripts. Mostly done alongside Phase 1.**
+**Phase 2 — Reproducible scripts. ✅ Done 2026-09-29, alongside Phase 1.**
 Implement all scripts of §6 and the test tiers of §9.
 All of §6 exists and runs unattended in CI except `detect.sh` and
-`forgejo.sh`/`github.sh` (not needed before Phase 3); `dist.sh` is still
-inline in `.github/workflows/build.yml`'s packaging step rather than its
-own script. All 5 test tiers of §9 run in `test.sh`.
+`forgejo.sh`/`github.sh` (not needed before Phase 3). `dist.sh` packages
+`build-rust.sh`'s raw stage directory (with a snapshot/restore step working
+around a bootstrap quirk, see `docs/backlog.md`) rather than using `x dist`/
+`x install`; migrating to those is tracked as a follow-up, not required for
+this phase's acceptance criterion. All 5 test tiers of §9 run in `test.sh`.
 *Done when:* on a clean machine, `fetch → apply → build-llvm → build-sdk → build-rust → test → dist` succeeds with no manual step.
+The packaging logic itself was proven in CI before being factored out into
+`dist.sh` ([run 36631014475](https://github.com/sbechet/rust-mos-sync/actions/runs/36631014475));
+the refactor should be a no-op but has not been independently re-verified yet.
 
 **Phase 3 — CI for Rust syncs and releases.**
 `watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
