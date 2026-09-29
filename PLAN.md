@@ -216,12 +216,24 @@ A richer test suite is what makes auto-merge safe; grow `tests/programs/` over t
 
 Complete each phase fully, including its acceptance criteria, before starting the next. Commit in small, reviewable steps.
 
-**Phase 1 — Manual bootstrap (local, interactive).**
+**Phase 1 — Manual bootstrap (local, interactive). ✅ Done 2026-09-27.**
 Build the first `rust-X.Y-mos` LLVM as described in §7.4, then patch rustc for the MOS targets.
 *Done when:* a toolchain built from `patches/` + `versions.toml` by the scripts compiles and runs `tests/programs/hello` on `mos-sim`, with vanilla cargo.
+Verified on GitHub Actions (a clean machine each run):
+[run 36344834435](https://github.com/sbechet/rust-mos-sync/actions/runs/36344834435) —
+`hello` runs correctly on `mos-sim`, and `cargo` on `PATH` (no fork, no
+`-Z build-std`) builds and runs a fresh crate against the toolchain
+(tier 5 smoke test). rustc/22.1 + the llvm-mos backend needed 4 backend
+patches beyond the extracted merge (an API adaptation, 128-bit div/rem,
+saturating float casts, three-way compare) and one target-level opt-out
+(f16/f128); see `docs/backlog.md`.
 
-**Phase 2 — Reproducible scripts.**
+**Phase 2 — Reproducible scripts. Mostly done alongside Phase 1.**
 Implement all scripts of §6 and the test tiers of §9.
+All of §6 exists and runs unattended in CI except `detect.sh` and
+`forgejo.sh`/`github.sh` (not needed before Phase 3); `dist.sh` is still
+inline in `.github/workflows/build.yml`'s packaging step rather than its
+own script. All 5 test tiers of §9 run in `test.sh`.
 *Done when:* on a clean machine, `fetch → apply → build-llvm → build-sdk → build-rust → test → dist` succeeds with no manual step.
 
 **Phase 3 — CI for Rust syncs and releases.**
