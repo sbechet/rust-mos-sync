@@ -241,9 +241,14 @@ The packaging logic itself was proven in CI before being factored out into
 `dist.sh` ([run 36631014475](https://github.com/sbechet/rust-mos-sync/actions/runs/36631014475));
 the refactor should be a no-op but has not been independently re-verified yet.
 
-**Phase 3 — CI for Rust syncs and releases.**
+**Phase 3 — CI for Rust syncs and releases. In progress: Docker image done.**
 `watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
 *Done when:* a new Rust point release produces a PR and, after merge, a published toolchain without intervention (Claude Code not yet enabled).
+`docker/Dockerfile` and the `docker` job of `build.yml` were built ahead of
+the rest of this phase (maintainer's call, 2026-09-30) since a working
+toolchain from Phase 1-2 was already enough to build and smoke-test it; it
+only runs manually (`build_docker` input) until `release.yml` exists to
+trigger it automatically. `watch.yml`, `sync-rust.yml`, `github.sh` remain.
 
 **Phase 4 — MOS backend sync.**
 `sync-mos-backend.yml` with deferral logic.

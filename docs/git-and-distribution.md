@@ -109,15 +109,25 @@ install.sh
 
 ### 2.2 Docker image
 
-`docker/Dockerfile`, built by `release.yml` from the release assets (no
-compilation in the image build), pushed to `ghcr.io/<owner>/rust-mos`:
+`docker/Dockerfile` (implemented 2026-09-30, `docker` job of
+`.github/workflows/build.yml`, manual for now via the `build_docker` input —
+Phase 3's `release.yml` will trigger it automatically once that exists), built
+from that run's own `dist.sh` tarball plus a fresh download of the pinned
+llvm-mos SDK release, pushed to `ghcr.io/<owner>/rust-mos`:
 
 - base `debian:trixie-slim`;
-- the rust-mos toolchain, set as the default rustup toolchain;
-- the pinned llvm-mos SDK in `PATH` (`mos-c64-clang` etc. as linkers, the C
-  runtime, `mos-sim`);
-- tags `1.98.1-mos.1`, `stable`, `beta`; `linux/amd64` first, `linux/arm64`
-  once the aarch64 toolchain exists.
+- the rust-mos toolchain and the llvm-mos SDK both on `PATH` directly (no
+  rustup inside the image — the toolchain tarball is already a complete,
+  standalone `bin/`+`lib/`);
+- one `CARGO_TARGET_<TRIPLE>_LINKER` env var per built-in MOS target, so a
+  project needs no `.cargo/config.toml` of its own;
+- tagged `stable`/`beta` (matching the build's `channel`) and
+  `sha-<commit>`; a version-numbered tag (`1.98.1-mos.1`) needs the release
+  tracking Phase 3's `release.yml` will add. `linux/amd64` only for now,
+  `linux/arm64` once an aarch64 toolchain exists.
+- smoke-tested before every push: builds and runs `tests/programs/hello` on
+  `mos-sim` inside the image, and builds it for `mos-c64-none` (link-only,
+  nothing to run in CI).
 
 Usage:
 
@@ -126,9 +136,6 @@ docker run --rm -v "$PWD":/src -w /src ghcr.io/<owner>/rust-mos:stable \
     cargo build --release --target mos-c64-none
 # -> target/mos-c64-none/release/<name> (a .prg loadable in VICE or on a C64)
 ```
-
-A minimal C64 example (text on screen) goes into `tests/programs/` and is used
-to smoke-test the image.
 
 ### 2.3 LLVM installs (not recompiling LLVM)
 
