@@ -1,0 +1,70 @@
+From ba8629a93abcec859dd87e037a8761583b1e49ae Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Wed, 30 Sep 2026 15:40:58 +0000
+Subject: [PATCH] rust_target: add NES (nrom) and Atari 8-bit (DOS) MOS
+ platform targets
+
+Both share the plain mos6502 CPU with mos-sim-none/mos-c64-none
+(base::mos::target's default), so no new callconv/arch code is needed -
+only the two target spec files plus the two registration lists
+(spec/mod.rs's target macro, bootstrap's STAGE0_MISSING_TARGETS).
+---
+ compiler/rustc_target/src/spec/mod.rs                        | 2 ++
+ .../rustc_target/src/spec/targets/mos_atari8_dos_none.rs     | 5 +++++
+ compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs  | 5 +++++
+ src/bootstrap/src/core/sanity.rs                             | 2 ++
+ 4 files changed, 14 insertions(+)
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+
+diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+index ec469192..7cd1f17d 100644
+--- a/compiler/rustc_target/src/spec/mod.rs
++++ b/compiler/rustc_target/src/spec/mod.rs
+@@ -1673,6 +1673,8 @@ fn $module() {
+     ("mos-unknown-none", mos_unknown_none),
+     ("mos-sim-none", mos_sim_none),
+     ("mos-c64-none", mos_c64_none),
++    ("mos-nes-nrom-none", mos_nes_nrom_none),
++    ("mos-atari8-dos-none", mos_atari8_dos_none),
+ 
+     ("aarch64_be-unknown-hermit", aarch64_be_unknown_hermit),
+     ("aarch64-unknown-hermit", aarch64_unknown_hermit),
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+new file mode 100644
+index 00000000..2fecc0fb
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari8-dos", "mos-atari8-dos-clang", "MOS 6502, Atari 8-bit (DOS)")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+new file mode 100644
+index 00000000..2fc91980
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-nrom", "mos-nes-nrom-clang", "MOS 2A03, Nintendo Entertainment System (NROM)")
++}
+diff --git a/src/bootstrap/src/core/sanity.rs b/src/bootstrap/src/core/sanity.rs
+index c9c343aa..721ea05b 100644
+--- a/src/bootstrap/src/core/sanity.rs
++++ b/src/bootstrap/src/core/sanity.rs
+@@ -45,6 +45,8 @@ pub struct Finder {
+     "mos-unknown-none",
+     "mos-sim-none",
+     "mos-c64-none",
++    "mos-nes-nrom-none",
++    "mos-atari8-dos-none",
+ ];
+ 
+ /// Minimum version threshold for libstdc++ required when using prebuilt LLVM
+-- 
+2.47.3
+
