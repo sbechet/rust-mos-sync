@@ -1,0 +1,258 @@
+From f5711c5a8a43d9a97374e65efa321a01600e52c1 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Wed, 30 Sep 2026 17:31:13 +0000
+Subject: [PATCH] rust_target: use underscores in target_vendor of hyphenated
+ MOS platforms
+
+cfg(target_vendor = "nes_nrom") rather than "nes-nrom"; the target names
+and SDK linker names keep their hyphens.
+---
+ compiler/rustc_target/src/spec/base/mos.rs                    | 4 +++-
+ .../rustc_target/src/spec/targets/mos_atari2600_3e_none.rs    | 2 +-
+ .../rustc_target/src/spec/targets/mos_atari2600_4k_none.rs    | 2 +-
+ .../src/spec/targets/mos_atari5200_supercart_none.rs          | 2 +-
+ .../src/spec/targets/mos_atari8_cart_megacart_none.rs         | 2 +-
+ .../rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs | 2 +-
+ .../src/spec/targets/mos_atari8_cart_xegs_none.rs             | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs   | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs   | 2 +-
+ .../rustc_target/src/spec/targets/mos_nes_action53_none.rs    | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs  | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs  | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs   | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs   | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs   | 2 +-
+ .../rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs   | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs  | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs    | 2 +-
+ compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs     | 2 +-
+ 20 files changed, 22 insertions(+), 20 deletions(-)
+
+diff --git a/compiler/rustc_target/src/spec/base/mos.rs b/compiler/rustc_target/src/spec/base/mos.rs
+index 036df280..c5f8e0f4 100644
+--- a/compiler/rustc_target/src/spec/base/mos.rs
++++ b/compiler/rustc_target/src/spec/base/mos.rs
+@@ -10,7 +10,9 @@
+ };
+ 
+ /// A MOS target linked with the SDK driver `linker`; `vendor` is the platform
+-/// name exposed as `target_vendor` (e.g. "sim", "c64"), "unknown" for none.
++/// name exposed as `target_vendor` (e.g. "sim", "c64"), "unknown" for none;
++/// hyphens become underscores ("nes_nrom") so the value stays one token for
++/// tools that split on `-`.
+ /// `cpu` must match the platform's own `mos-<platform>-clang` default (its
+ /// `clang.cfg`, inherited from its SDK `PARENT` platform when it sets none
+ /// itself) - most platforms are plain `mos6502`; a few widen the ISA
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs
+index 4f3d32c8..5fd728db 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari2600-3e", "mos-atari2600-3e-clang", "MOS 6502X, Atari 2600 (TigerVision 3E)", "mos6502x")
++    base::mos::target("atari2600_3e", "mos-atari2600-3e-clang", "MOS 6502X, Atari 2600 (TigerVision 3E)", "mos6502x")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs
+index 7942edab..a905f742 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari2600-4k", "mos-atari2600-4k-clang", "MOS 6502X, Atari 2600 (4K)", "mos6502x")
++    base::mos::target("atari2600_4k", "mos-atari2600-4k-clang", "MOS 6502X, Atari 2600 (4K)", "mos6502x")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs
+index f2fa1227..5169f2b9 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari5200-supercart", "mos-atari5200-supercart-clang", "MOS 6502, Atari 5200 (Super Cart)", "mos6502")
++    base::mos::target("atari5200_supercart", "mos-atari5200-supercart-clang", "MOS 6502, Atari 5200 (Super Cart)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs
+index af414e33..fb3be3ab 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari8-cart-megacart", "mos-atari8-cart-megacart-clang", "MOS 6502, Atari 8-bit (MegaCart cartridge)", "mos6502")
++    base::mos::target("atari8_cart_megacart", "mos-atari8-cart-megacart-clang", "MOS 6502, Atari 8-bit (MegaCart cartridge)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs
+index 2663c04e..3b19acde 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari8-cart-std", "mos-atari8-cart-std-clang", "MOS 6502, Atari 8-bit (standard cartridge)", "mos6502")
++    base::mos::target("atari8_cart_std", "mos-atari8-cart-std-clang", "MOS 6502, Atari 8-bit (standard cartridge)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs
+index 39482399..1482b828 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari8-cart-xegs", "mos-atari8-cart-xegs-clang", "MOS 6502, Atari 8-bit (XEGS cartridge)", "mos6502")
++    base::mos::target("atari8_cart_xegs", "mos-atari8-cart-xegs-clang", "MOS 6502, Atari 8-bit (XEGS cartridge)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+index 63ff5718..d82d0ee5 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari8-dos", "mos-atari8-dos-clang", "MOS 6502, Atari 8-bit (DOS)", "mos6502")
++    base::mos::target("atari8_dos", "mos-atari8-dos-clang", "MOS 6502, Atari 8-bit (DOS)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs b/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs
+index a10e1ec7..72d519be 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("geos-cbm", "mos-geos-cbm-clang", "MOS 6502, Commodore GEOS (64/128)", "mos6502")
++    base::mos::target("geos_cbm", "mos-geos-cbm-clang", "MOS 6502, Commodore GEOS (64/128)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs b/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs
+index e027d058..093d7e92 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("lynx-bll", "mos-lynx-bll-clang", "MOS 65SC02, Atari Lynx (BLL executable)", "mos65c02")
++    base::mos::target("lynx_bll", "mos-lynx-bll-clang", "MOS 65SC02, Atari Lynx (BLL executable)", "mos65c02")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs
+index 9f5cfa61..ca4d8d04 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-action53", "mos-nes-action53-clang", "MOS 2A03, NES (Action 53 mapper)", "mos6502")
++    base::mos::target("nes_action53", "mos-nes-action53-clang", "MOS 2A03, NES (Action 53 mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs
+index 2f45c665..45d93b08 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-cnrom", "mos-nes-cnrom-clang", "MOS 2A03, NES (CNROM mapper)", "mos6502")
++    base::mos::target("nes_cnrom", "mos-nes-cnrom-clang", "MOS 2A03, NES (CNROM mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs
+index ad443566..19c6c60f 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-gtrom", "mos-nes-gtrom-clang", "MOS 2A03, NES (GTROM mapper)", "mos6502")
++    base::mos::target("nes_gtrom", "mos-nes-gtrom-clang", "MOS 2A03, NES (GTROM mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs
+index 696c62c4..8c825698 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-mmc1", "mos-nes-mmc1-clang", "MOS 2A03, NES (MMC1 mapper)", "mos6502")
++    base::mos::target("nes_mmc1", "mos-nes-mmc1-clang", "MOS 2A03, NES (MMC1 mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs
+index 4e365929..87ee1a22 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-mmc3", "mos-nes-mmc3-clang", "MOS 2A03, NES (MMC3 mapper)", "mos6502")
++    base::mos::target("nes_mmc3", "mos-nes-mmc3-clang", "MOS 2A03, NES (MMC3 mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+index 8549394d..e1a1afbc 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-nrom", "mos-nes-nrom-clang", "MOS 2A03, Nintendo Entertainment System (NROM)", "mos6502")
++    base::mos::target("nes_nrom", "mos-nes-nrom-clang", "MOS 2A03, Nintendo Entertainment System (NROM)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs
+index d0e35912..1d2b2d2a 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-unrom-512", "mos-nes-unrom-512-clang", "MOS 2A03, NES (UNROM-512 mapper)", "mos6502")
++    base::mos::target("nes_unrom_512", "mos-nes-unrom-512-clang", "MOS 2A03, NES (UNROM-512 mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs
+index 04013ad8..c3de1f51 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-unrom", "mos-nes-unrom-clang", "MOS 2A03, NES (UNROM mapper)", "mos6502")
++    base::mos::target("nes_unrom", "mos-nes-unrom-clang", "MOS 2A03, NES (UNROM mapper)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs b/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs
+index c41db171..7188f1d2 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("osi-c1p", "mos-osi-c1p-clang", "MOS 6502, Ohio Scientific Challenger 1P", "mos6502")
++    base::mos::target("osi_c1p", "mos-osi-c1p-clang", "MOS 6502, Ohio Scientific Challenger 1P", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs b/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs
+index 17e14e08..a18ad955 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("pce-cd", "mos-pce-cd-clang", "Hudson HuC6280, PC Engine CD", "moshuc6280")
++    base::mos::target("pce_cd", "mos-pce-cd-clang", "Hudson HuC6280, PC Engine CD", "moshuc6280")
+ }
+-- 
+2.47.3
+

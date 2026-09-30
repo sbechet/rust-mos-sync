@@ -1,0 +1,58 @@
+From 4fba8b2b631a0f914e6dbde6602517019008bfac Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Wed, 30 Sep 2026 18:08:41 +0000
+Subject: [PATCH] rust_target: rename mos-apple2-none to mos-a2-none
+
+bootstrap tests target.contains("apple") in several places and treated it
+as an Apple platform (--print=deployment-target failed the build).
+---
+ compiler/rustc_target/src/spec/mod.rs                           | 2 +-
+ .../src/spec/targets/{mos_apple2_none.rs => mos_a2_none.rs}     | 2 ++
+ src/bootstrap/src/core/sanity.rs                                | 2 +-
+ 3 files changed, 4 insertions(+), 2 deletions(-)
+ rename compiler/rustc_target/src/spec/targets/{mos_apple2_none.rs => mos_a2_none.rs} (59%)
+
+diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+index b0d809b9..68a4f78a 100644
+--- a/compiler/rustc_target/src/spec/mod.rs
++++ b/compiler/rustc_target/src/spec/mod.rs
+@@ -1675,7 +1675,7 @@ fn $module() {
+     ("mos-c64-none", mos_c64_none),
+     ("mos-nes-nrom-none", mos_nes_nrom_none),
+     ("mos-atari8-dos-none", mos_atari8_dos_none),
+-    ("mos-apple2-none", mos_apple2_none),
++    ("mos-a2-none", mos_a2_none),
+     ("mos-atari2600-4k-none", mos_atari2600_4k_none),
+     ("mos-atari2600-3e-none", mos_atari2600_3e_none),
+     ("mos-atari5200-supercart-none", mos_atari5200_supercart_none),
+diff --git a/compiler/rustc_target/src/spec/targets/mos_apple2_none.rs b/compiler/rustc_target/src/spec/targets/mos_a2_none.rs
+similarity index 59%
+rename from compiler/rustc_target/src/spec/targets/mos_apple2_none.rs
+rename to compiler/rustc_target/src/spec/targets/mos_a2_none.rs
+index a60508de..7fa2cd92 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_apple2_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_a2_none.rs
+@@ -1,5 +1,7 @@
+ use crate::spec::{Target, base};
+ 
++// Named mos-a2-none, not mos-apple2-none: bootstrap treats any target name
++// containing "apple" as an Apple platform.
+ pub(crate) fn target() -> Target {
+     base::mos::target("apple2", "mos-apple2-clang", "MOS 6502, Apple II / IIe (ProDOS 8 SYS)", "mos6502")
+ }
+diff --git a/src/bootstrap/src/core/sanity.rs b/src/bootstrap/src/core/sanity.rs
+index fcf0010f..27860663 100644
+--- a/src/bootstrap/src/core/sanity.rs
++++ b/src/bootstrap/src/core/sanity.rs
+@@ -47,7 +47,7 @@ pub struct Finder {
+     "mos-c64-none",
+     "mos-nes-nrom-none",
+     "mos-atari8-dos-none",
+-    "mos-apple2-none",
++    "mos-a2-none",
+     "mos-atari2600-4k-none",
+     "mos-atari2600-3e-none",
+     "mos-atari5200-supercart-none",
+-- 
+2.47.3
+

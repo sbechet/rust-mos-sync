@@ -77,14 +77,41 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
    `avr`/`msp430`/`m68k`) and re-vendor whenever `src/bootstrap/Cargo.toml`'s
    `cc = "=X.Y.Z"` pin changes at an LLVM/Rust bump.
 
-1. **More built-in platform targets.** The community uses `mos-<platform>-none`
-   named after the SDK platform (vendor = platform, linker
-   `mos-<platform>-clang`): most used `mos-c64-none` (done), `mos-sim-none`
-   (done), then `mos-mega65-none`, `mos-atari8-dos-none`, `mos-nes-nrom-none`,
-   `mos-cx16-none`. The CPU differs per platform (mega65: 45GS02, cx16: 65C02,
-   pce: HuC6280), so each built-in target sets its `cpu`. Every target costs a
-   rust-std build in CI (minutes); custom JSON targets remain possible for the
-   rest but need nightly features, so built-ins are the stable-friendly path.
+1. **More built-in platform targets. Done (2026-09-30).** Every
+   `mos-<platform>-clang` driver llvm-mos-sdk's README lists now has a
+   matching built-in `mos-<platform>-none` target (vendor = platform,
+   linker `mos-<platform>-clang`): patch 0005 added `mos-nes-nrom-none` and
+   `mos-atari8-dos-none` first (both plain `mos6502` like `mos-c64-none`/
+   `mos-sim-none`), then patch 0006 added the remaining 32 - Apple II (`mos-a2-none`: patch 0009 renamed it from
+   `mos-apple2-none`, since bootstrap treats any target name containing
+   "apple" as an Apple platform; hyphenated platform names also needed the
+   cc parser fix, patch 0007, and underscores in `target_vendor`, 0008),
+   Atari 2600 (4K/3E)/5200/8-bit (DOS/std/MegaCart/XEGS cartridges), Atari
+   Lynx (BLL), Ben Eater's breadboard, Commander X16, Commodore 128/PET/
+   VIC-20, CP/M-65, Dodo, GEOS, MEGA65, every NES mapper (Action53/CNROM/
+   GTROM/MMC1/MMC3/UNROM/UNROM-512) plus FDS, Ohio Scientific, Neo6502,
+   RP6502, PC Engine (+CD), RPC/8e, Watara Supervision.
+   `base::mos::target()` now takes an explicit `cpu`, matched to each
+   platform's own `clang.cfg` default (inherited from its SDK `PARENT`
+   platform when it sets none itself - checked against the llvm-mos-sdk
+   checkout, not guessed): plain `mos6502` for most, `mos6502x` for the
+   Atari 2600 family (undocumented opcodes only), `mosw65c02`/`mos65c02`
+   for the WDC-65C02-based platforms (cx16, eater, neo6502, rp6502 /
+   lynx-bll, supervision), `moshuc6280` for the PC Engine, `mos45gs02` for
+   MEGA65, `mos65el02` for RPC/8e. `build-rust.sh`/`test.sh` pick up every
+   new target automatically (they discover `mos-*` targets from
+   `rustc_target/src/spec/mod.rs` rather than a hardcoded list), and
+   `docker-image.yml`'s smoke test now link-builds every target except
+   `mos-unknown-none` (no real platform to link against) and `mos-sim-none`
+   (already build+run tested). Not ported: the SDK's shared, non-leaf
+   "-common"/base configs (`common`, `atari8-common`, `atari2600-common`,
+   `pce-common`, `commodore`, `lynx`) have no `mos-<name>-clang` driver of
+   their own - only their COMPLETE children do.
+   Every target costs a rust-std build in CI (minutes) - with 37 MOS
+   targets now built-in, watch the `rust` job's wall-clock on the next real
+   CI run; custom JSON targets remain possible for anything llvm-mos adds
+   later but need nightly features, so built-ins stay the stable-friendly
+   path.
 2. **compiler_builtins vs. the SDK runtime.** For no_std targets bootstrap enables
    `compiler-builtins-mem`, so the Rust `memcpy`/`memset`/`memcmp`, soft-float
    and integer helpers are linked (weak symbols). rust-mos cfg'd them out on MOS
