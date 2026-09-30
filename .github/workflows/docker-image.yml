@@ -94,17 +94,23 @@ jobs:
           [ "$out" = "$(cat tests/programs/hello/expected.stdout)" ] \
             || { echo "unexpected output: $out"; exit 1; }
 
-      - name: Smoke test — build for every link-only platform (no emulator in CI)
+      - name: Smoke test — link every platform (no emulator in CI)
         run: |
-          # mos-unknown-none has no real SDK platform to link against and
-          # mos-sim-none is already build+run tested above; every other
-          # built-in MOS target is link-only here (rustc_target/src/spec/mod.rs).
+          # tests/link-check calls no libc function (the Atari 2600 has no
+          # putchar, so tests/programs/hello cannot link there). Every
+          # built-in MOS target is checked except mos-unknown-none (no real
+          # platform to link against) and mos-sim-none (build+run above).
+          # All targets are tried before failing, to report every broken one.
           targets=$(docker run --rm rust-mos:smoke-test rustc --print target-list \
             | grep '^mos-' | grep -v -e mos-unknown-none -e mos-sim-none)
+          failed=""
           for t in $targets; do
-            docker run --rm -v "$PWD/tests/programs/hello:/src" rust-mos:smoke-test \
-              cargo build --release --target "$t"
+            echo "::group::$t"
+            docker run --rm -v "$PWD/tests/link-check:/src" rust-mos:smoke-test \
+              cargo build --release --target "$t" || failed="$failed $t"
+            echo "::endgroup::"
           done
+          [ -z "$failed" ] || { echo "::error::link failed for:$failed"; exit 1; }
 
       - name: Log in to ghcr.io
         uses: docker/login-action@v3
