@@ -82,7 +82,10 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
    matching built-in `mos-<platform>-none` target (vendor = platform,
    linker `mos-<platform>-clang`): patch 0005 added `mos-nes-nrom-none` and
    `mos-atari8-dos-none` first (both plain `mos6502` like `mos-c64-none`/
-   `mos-sim-none`), then patch 0006 added the remaining 32 - Apple II,
+   `mos-sim-none`), then patch 0006 added the remaining 32 - Apple II (`mos-a2-none`: patch 0009 renamed it from
+   `mos-apple2-none`, since bootstrap treats any target name containing
+   "apple" as an Apple platform; hyphenated platform names also needed the
+   cc parser fix, patch 0007, and underscores in `target_vendor`, 0008),
    Atari 2600 (4K/3E)/5200/8-bit (DOS/std/MegaCart/XEGS cartridges), Atari
    Lynx (BLL), Ben Eater's breadboard, Commander X16, Commodore 128/PET/
    VIC-20, CP/M-65, Dodo, GEOS, MEGA65, every NES mapper (Action53/CNROM/
