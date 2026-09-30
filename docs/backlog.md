@@ -37,6 +37,32 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
 
 ## Actions
 
+-1. **Beta needs an LLVM bump before it can build at all.** Found by the
+    first real `sync-rust.yml` dispatch (channel=beta, 2026-09-30):
+    `patches/llvm/` was extracted for `rustc/22.1-2026-05-19` only (stable's
+    branch at the time); beta has been on `rustc/23.1-2026-07-22` since this
+    repository's very first `versions.toml` - not upstream drift during this
+    project, just the normal state PLAN.md §3.5 describes ("LLVM bumps
+    appear on beta 6-12 weeks before stable"). The build failed at
+    `apply.sh llvm` (`git am -3`: "not our ref", the promisor remote
+    couldn't lazily fetch a blob needed for the 3-way merge) - expected,
+    since the patch was never calibrated for 23.1.
+    `detect.sh` originally compared a channel's new candidate against that
+    *same channel's own previously recorded* `llvm_branch`, which is wrong:
+    beta's recorded branch was already 23.1, so "unchanged" looked like "no
+    bump needed" and would have retried (and failed) the build daily via
+    `watch.yml`. Fixed by comparing against a new authoritative
+    `llvm_mos.patched_branch` field (the branch the patches actually target)
+    instead - beta now correctly classifies as `llvm-bump`, not `sync-rust`.
+    Real fix is Phase 6 (`llvm-bump.yml`): extract a MOS patch against
+    23.1 and update `patched_branch`. Tracking issue:
+    https://github.com/sbechet/rust-mos-sync/issues/1 (opened by the failed
+    run, before this fix - can be closed/left as a Phase 6 reminder).
+    Phase 3's sync-rust.yml mechanics (detection, branch, versions.toml bump,
+    conditional steps, failure issue) all worked correctly end to end in
+    this same run; only stable's actual success path (build+test+PR) still
+    needs a real run to be confirmed, which needs an actual new stable tag.
+
 0. **Upstream MOS support to `rust-lang/cc-rs`.** Bootstrap unconditionally
    probes a C compiler for every configured target (even pure `no_std` ones,
    `src/bootstrap/src/utils/cc_detect.rs`), through the `cc` crate, which

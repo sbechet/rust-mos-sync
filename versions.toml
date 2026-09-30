@@ -17,6 +17,12 @@ llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
 base_merge = "cdfebee3c9da537c00e74a650aa8fa5201a97c6f"   # upstream parent ecd2b6862c31
 last_synced = "cdfebee3c9da537c00e74a650aa8fa5201a97c6f"
 deferred = []
+# The Rust LLVM branch patches/llvm/ is actually calibrated for - not
+# necessarily rust.stable.llvm_branch or rust.beta.llvm_branch, since one of
+# them can (and often does) be ahead, on a branch nobody has extracted a MOS
+# patch for yet. Set by llvm-bump.yml (Phase 6); until then, kept in sync by
+# hand whenever base_merge changes.
+patched_branch = "rustc/22.1-2026-05-19"
 
 [llvm_mos_sdk]
 # Prebuilt release used for linking and mos-sim (scripts/build-sdk.sh).

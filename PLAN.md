@@ -241,9 +241,18 @@ The packaging logic itself was proven in CI before being factored out into
 `dist.sh` ([run 36631014475](https://github.com/sbechet/rust-mos-sync/actions/runs/36631014475));
 the refactor should be a no-op but has not been independently re-verified yet.
 
-**Phase 3 — CI for Rust syncs and releases. In progress: Docker image, `detect.sh`, `github.sh`, `watch.yml`, `sync-rust.yml` done, not yet exercised end to end.**
+**Phase 3 — CI for Rust syncs and releases. In progress.**
 `watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
 *Done when:* a new Rust point release produces a PR and, after merge, a published toolchain without intervention (Claude Code not yet enabled).
+First real dispatch of `sync-rust.yml` (channel=beta, 2026-09-30) exercised
+detection, branching, the `versions.toml` bump, conditional steps and
+failure-issue reporting correctly end to end, but hit a real wall applying
+`patches/llvm/` to beta's LLVM branch (`docs/backlog.md` -1, a genuine
+Phase 6 dependency, not a Phase 3 bug - fixed `detect.sh`'s classification
+so this reports as `llvm-bump` now instead of retrying a doomed build
+daily). Stable's success path (build, test, PR) still needs a real new
+stable tag to confirm; the maintainer chose to wait for one rather than a
+synthetic test.
 Two one-time maintainer setup steps needed before this is fully automatic:
 1. Create the GitHub labels `sync-rust-failure-stable`, `sync-rust-failure-beta`,
    `llvm-bump-needed-stable`, `llvm-bump-needed-beta`, `watch-pending` on the
