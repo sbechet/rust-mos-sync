@@ -1,0 +1,117 @@
+# Reusable: builds docker/Dockerfile from an already-uploaded toolchain
+# artifact, smoke-tests it, and pushes it to ghcr.io. Called by build.yml's
+# manual `docker` job and by release.yml, so the logic lives in one place.
+name: docker-image
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: "stable or beta - tagged as ghcr.io/<owner>/rust-mos:<channel>"
+        required: true
+        type: string
+      artifact_name:
+        description: "Name of the already-uploaded toolchain-*.tar.xz artifact"
+        required: true
+        type: string
+      release:
+        description: >-
+          True only from release.yml: also push the version tag
+          (v<rust.stable.tag>-mos.<mos_revision>, computed here from
+          versions.toml so it never depends on matrix job outputs, which
+          GitHub Actions does not pair by matrix key across jobs). False
+          from build.yml's manual/ad hoc test dispatch, which must never
+          push a version tag for an untested channel state.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: docker
+
+      - name: Rename for the Dockerfile's COPY
+        run: mv docker/rust-mos-*.tar.xz docker/toolchain.tar.xz
+
+      - name: SDK version from versions.toml
+        id: sdk
+        run: |
+          . scripts/lib.sh
+          echo "release=$(ver_get llvm_mos_sdk.release)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(ver_get llvm_mos_sdk.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Tags to push
+        id: tags
+        run: |
+          tags="ghcr.io/${{ github.repository_owner }}/rust-mos:${{ inputs.channel }}
+          ghcr.io/${{ github.repository_owner }}/rust-mos:sha-${{ github.sha }}"
+          # Beta's "version tag" is the rolling `beta` tag itself (already
+          # above), so there is nothing extra to add for it - only stable
+          # gets a second, immutable, numbered tag.
+          if [ "${{ inputs.release }}" = true ] && [ "${{ inputs.channel }}" = stable ]; then
+            . scripts/lib.sh
+            version_tag="v$(ver_get rust.stable.tag)-mos.$(ver_get release.mos_revision)"
+            tags="$tags
+          ghcr.io/${{ github.repository_owner }}/rust-mos:$version_tag"
+          fi
+          {
+            echo "tags<<TAGSEOF"
+            echo "$tags"
+            echo "TAGSEOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          tags: rust-mos:smoke-test
+          build-args: |
+            SDK_RELEASE=${{ steps.sdk.outputs.release }}
+            SDK_SHA256=${{ steps.sdk.outputs.sha256 }}
+          load: true
+
+      - name: Smoke test — build and run hello on mos-sim
+        run: |
+          docker run --rm -v "$PWD/tests/programs/hello:/src" rust-mos:smoke-test \
+            cargo build --release --target mos-sim-none
+          out=$(docker run --rm -v "$PWD/tests/programs/hello:/src" rust-mos:smoke-test \
+            mos-sim target/mos-sim-none/release/hello)
+          [ "$out" = "$(cat tests/programs/hello/expected.stdout)" ] \
+            || { echo "unexpected output: $out"; exit 1; }
+
+      - name: Smoke test — build for mos-c64-none (links, not run)
+        run: |
+          docker run --rm -v "$PWD/tests/programs/hello:/src" rust-mos:smoke-test \
+            cargo build --release --target mos-c64-none
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            SDK_RELEASE=${{ steps.sdk.outputs.release }}
+            SDK_SHA256=${{ steps.sdk.outputs.sha256 }}

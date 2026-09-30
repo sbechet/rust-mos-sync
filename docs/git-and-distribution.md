@@ -83,37 +83,52 @@ quota for a public repository, so no aggressive rotation is needed.
 
 ### 2.1 Toolchain releases
 
-Produced by `scripts/dist.sh` (`x.py dist`) and published by `release.yml` with
-`gh release create v<version>-mos.<N>`:
+Produced by `scripts/dist.sh` (packages `build-rust.sh`'s stage directory,
+see `docs/backlog.md` on why not `x dist`) and published by
+`.github/workflows/release.yml` (implemented 2026-09-30) with
+`gh release create v<rust.stable.tag>-mos.<release.mos_revision>` for stable,
+or `gh release upload beta --clobber` for the rolling beta pre-release:
 
 ```
-rust-mos-1.98.1-mos.1-x86_64-unknown-linux-gnu.tar.xz
-rust-mos-1.98.1-mos.1-x86_64-unknown-linux-gnu.tar.xz.sha256
-release.json      # repo commit, rust tag, llvm commit, patch hashes, SDK release
-install.sh
+rust-mos-stable-x86_64-unknown-linux-gnu.tar.xz
+rust-mos-stable-x86_64-unknown-linux-gnu.tar.xz.sha256
+install-stable.sh
 ```
+
+(`release.json` with repo commit/rust tag/llvm commit/patch hashes/SDK
+release was considered but not built - not needed for `install.sh` to work,
+and versions.toml + the git tag/commit already say all of this; tracked in
+`docs/backlog.md` if a machine-readable manifest turns out to be wanted
+later.)
 
 - One combined tarball per host rather than the separate `x.py dist`
   components: easier to install.
-- `install.sh` (runs locally, compiles nothing):
-  1. download and verify the tarball (sha256);
+- `install-<channel>.sh`, rendered from `config/install.sh.in` (its
+  `@SDK_RELEASE@`/`@SDK_SHA256@` filled in from `versions.toml` at release
+  time, so it always matches the SDK that release was actually tested
+  against). Runs locally, compiles nothing:
+  1. resolve the release tag (`/releases/latest` for stable, literally
+     `beta` for beta) and download+verify the tarball (sha256);
   2. download the pinned llvm-mos SDK release if missing (its linkers and
      `mos-sim` are needed);
-  3. unpack under `~/.local/share/rust-mos/<version>`;
-  4. `rustup toolchain link mos-stable <dir>` (or `mos-beta`);
+  3. unpack under `~/.local/share/rust-mos/<tag>-<host>`;
+  4. `rustup toolchain link mos-stable <dir>` (or `mos-beta`), if `rustup`
+     is on `PATH` - otherwise just prints where the toolchain landed;
   5. print the `PATH` addition for the SDK `bin/`.
   Usage: `cargo +mos-stable build --release --target mos-c64-none`.
 - MOS targets ship only `core`, `alloc` and `compiler_builtins` (PLAN.md §3.2).
-- Later (Phase 7): rustup channel manifests served from the releases so that
+- Only `x86_64-unknown-linux-gnu` so far, matching everything else built and
+  tested this session. Later (Phase 7): additional hosts, rustup channel
+  manifests served from the releases so that
   `RUSTUP_DIST_SERVER=… rustup toolchain install` works directly.
 
 ### 2.2 Docker image
 
-`docker/Dockerfile` (implemented 2026-09-30, `docker` job of
-`.github/workflows/build.yml`, manual for now via the `build_docker` input —
-Phase 3's `release.yml` will trigger it automatically once that exists), built
-from that run's own `dist.sh` tarball plus a fresh download of the pinned
-llvm-mos SDK release, pushed to `ghcr.io/<owner>/rust-mos`:
+`docker/Dockerfile`, built by the reusable `.github/workflows/docker-image.yml`
+(factored out 2026-09-30 so `build.yml`'s manual `docker` job - still gated
+behind the `build_docker` input, for ad hoc testing - and `release.yml`'s
+automatic one share the exact same build+smoke-test+push steps instead of
+duplicating them), pushed to `ghcr.io/<owner>/rust-mos`:
 
 - base `debian:trixie-slim`;
 - the rust-mos toolchain and the llvm-mos SDK both on `PATH` directly (no
@@ -121,10 +136,10 @@ llvm-mos SDK release, pushed to `ghcr.io/<owner>/rust-mos`:
   standalone `bin/`+`lib/`);
 - one `CARGO_TARGET_<TRIPLE>_LINKER` env var per built-in MOS target, so a
   project needs no `.cargo/config.toml` of its own;
-- tagged `stable`/`beta` (matching the build's `channel`) and
-  `sha-<commit>`; a version-numbered tag (`1.98.1-mos.1`) needs the release
-  tracking Phase 3's `release.yml` will add. `linux/amd64` only for now,
-  `linux/arm64` once an aarch64 toolchain exists.
+- tagged `<channel>` (`stable`/`beta`), `sha-<commit>`, and — only when
+  called from `release.yml` — the version tag too
+  (`v1.98.1-mos.1`/`beta`). `linux/amd64` only for now, `linux/arm64` once
+  an aarch64 toolchain exists.
 - smoke-tested before every push: builds and runs `tests/programs/hello` on
   `mos-sim` inside the image, and builds it for `mos-c64-none` (link-only,
   nothing to run in CI).

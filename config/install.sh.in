@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# install.sh [stable|beta] [toolchain-name]
+#
+# Installs a rust-mos-sync release with nothing but curl, tar and rustup:
+# downloads the toolchain (rustc, cargo, MOS core/alloc) and the llvm-mos
+# SDK (linkers, C runtime, mos-sim) it was built against, verifies both,
+# unpacks them under ~/.local/share/rust-mos/, and links the toolchain into
+# rustup. Uploaded as a release asset by .github/workflows/release.yml,
+# which fills in @SDK_RELEASE@/@SDK_SHA256@ so this script always matches
+# the SDK the release it ships with was actually tested against.
+#
+# Usage:
+#   ./install.sh              # stable, linked as "mos-stable"
+#   ./install.sh beta         # beta, linked as "mos-beta"
+#   ./install.sh stable mos   # custom rustup toolchain name
+set -euo pipefail
+
+channel="${1:-stable}"
+toolchain_name="${2:-mos-$channel}"
+repo="sbechet/rust-mos-sync"
+sdk_release="@SDK_RELEASE@"
+sdk_sha256="@SDK_SHA256@"
+host="x86_64-unknown-linux-gnu"
+
+case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) sdk_asset=llvm-mos-linux.tar.xz ;;
+    *) echo "error: only Linux x86_64 hosts are published so far" >&2; exit 1 ;;
+esac
+case "$channel" in
+    # /releases/latest is GitHub's own "newest non-prerelease, non-draft"
+    # release - exactly the versioned stable tag we want, without needing
+    # to parse a whole release list. Beta is a single rolling pre-release
+    # (release.yml replaces its assets in place), always tagged "beta".
+    stable) release_tag=$(curl -sSf "https://api.github.com/repos/$repo/releases/latest" \
+                | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/') ;;
+    beta) release_tag=beta ;;
+    *) echo "usage: install.sh [stable|beta] [toolchain-name]" >&2; exit 1 ;;
+esac
+[ -n "$release_tag" ] || { echo "error: no $channel release found on $repo" >&2; exit 1; }
+
+dest="$HOME/.local/share/rust-mos"
+toolchain_dir="$dest/$release_tag-$host"
+sdk_dir="$dest/sdk-$sdk_release"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+echo "Installing rust-mos $channel ($release_tag) for $host..."
+base="https://github.com/$repo/releases/download/$release_tag"
+curl -sSfL --retry 3 -o "$tmp/toolchain.tar.xz" "$base/rust-mos-$channel-$host.tar.xz"
+curl -sSfL --retry 3 -o "$tmp/toolchain.tar.xz.sha256" "$base/rust-mos-$channel-$host.tar.xz.sha256"
+(cd "$tmp" && sha256sum -c "toolchain.tar.xz.sha256")
+rm -rf "$toolchain_dir"
+mkdir -p "$toolchain_dir"
+tar -xJf "$tmp/toolchain.tar.xz" -C "$toolchain_dir"
+
+if [ ! -x "$sdk_dir/bin/mos-clang" ]; then
+    echo "Installing the llvm-mos SDK ($sdk_release)..."
+    curl -sSfL --retry 3 -o "$tmp/sdk.tar.xz" \
+        "https://github.com/llvm-mos/llvm-mos-sdk/releases/download/$sdk_release/$sdk_asset"
+    echo "$sdk_sha256  $tmp/sdk.tar.xz" | sha256sum -c --quiet -
+    mkdir -p "$sdk_dir"
+    tar -xJf "$tmp/sdk.tar.xz" -C "$sdk_dir" --strip-components=1
+fi
+
+if command -v rustup >/dev/null 2>&1; then
+    rustup toolchain link "$toolchain_name" "$toolchain_dir"
+    echo
+    echo "Installed. Try it:"
+    echo "  export PATH=\"$sdk_dir/bin:\$PATH\""
+    echo "  cargo +$toolchain_name build --release --target mos-c64-none"
+else
+    echo
+    echo "rustup not found - toolchain left unlinked at: $toolchain_dir"
+    echo "Add its bin/ and $sdk_dir/bin to PATH, or install rustup and re-run:"
+    echo "  rustup toolchain link $toolchain_name $toolchain_dir"
+fi

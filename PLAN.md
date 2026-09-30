@@ -241,7 +241,7 @@ The packaging logic itself was proven in CI before being factored out into
 `dist.sh` ([run 36631014475](https://github.com/sbechet/rust-mos-sync/actions/runs/36631014475));
 the refactor should be a no-op but has not been independently re-verified yet.
 
-**Phase 3 — CI for Rust syncs and releases. In progress.**
+**Phase 3 — CI for Rust syncs and releases. Implemented 2026-09-30, pending real-world validation.**
 `watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
 *Done when:* a new Rust point release produces a PR and, after merge, a published toolchain without intervention (Claude Code not yet enabled).
 First real dispatch of `sync-rust.yml` (channel=beta, 2026-09-30) exercised
@@ -255,8 +255,9 @@ stable tag to confirm; the maintainer chose to wait for one rather than a
 synthetic test.
 Two one-time maintainer setup steps needed before this is fully automatic:
 1. Create the GitHub labels `sync-rust-failure-stable`, `sync-rust-failure-beta`,
-   `llvm-bump-needed-stable`, `llvm-bump-needed-beta`, `watch-pending` on the
-   repo (`gh issue create --label X` errors if the label doesn't exist yet).
+   `llvm-bump-needed-stable`, `llvm-bump-needed-beta`, `watch-pending`,
+   `release-failure-stable`, `release-failure-beta` on the repo
+   (`gh issue create --label X` errors if the label doesn't exist yet).
 2. Optional, for `watch.yml` to dispatch `sync-rust.yml` automatically: add a
    repo secret `WORKFLOW_DISPATCH_TOKEN` holding a fine-grained PAT with this
    repo's Actions read/write (`GITHUB_TOKEN` cannot dispatch another
@@ -266,9 +267,38 @@ Two one-time maintainer setup steps needed before this is fully automatic:
 
 `docker/Dockerfile` and the `docker` job of `build.yml` were built ahead of
 the rest of this phase (maintainer's call, 2026-09-30) since a working
-toolchain from Phase 1-2 was already enough to build and smoke-test it; it
-only runs manually (`build_docker` input) until `release.yml` exists to
-trigger it automatically. `watch.yml`, `sync-rust.yml`, `github.sh` remain.
+toolchain from Phase 1-2 was already enough to build and smoke-test it. Its
+steps were later factored out into `.github/workflows/docker-image.yml`, a
+reusable (`workflow_call`) workflow, so `release.yml` could call the exact
+same build+smoke-test+push logic instead of duplicating it; `build.yml`'s
+`docker` job now just calls it too (manual `build_docker` input, still
+gated off on `pull_request` events).
+
+`release.yml` is written (2026-09-30): triggers on push-to-`main` when
+`versions.toml` changes (or `workflow_dispatch` with an explicit channel,
+for a manual re-release), diffs `versions.toml`'s `[rust.stable]`/
+`[rust.beta]` sections against the previous commit to decide which
+channel(s) actually changed, then per channel: rebuilds LLVM (a cache hit
+in the common case, since the `sync-rust.yml` run that produced this
+`versions.toml` change just built and cached the same key) and rustc at
+`STAGE=2`, runs all 5 test tiers, packages via `dist.sh`, renders
+`install.sh` from `config/install.sh.in` (fills in the pinned
+`llvm_mos_sdk.release`/`sha256`), and publishes: an immutable
+`v<rust.stable.tag>-mos.<release.mos_revision>` GitHub release for stable,
+or a rolling pre-release tagged `beta` (assets replaced with `--clobber`)
+for beta - then calls `docker-image.yml` to push the matching `ghcr.io`
+image tagged `<channel>`, `sha-<commit>` and the version tag. A build
+failure opens/updates a `release-failure-<channel>` tracking issue via
+`github.sh` (label needs creating like the others below).
+Not yet exercised for real: needs an actual `versions.toml` change to reach
+`main`, which depends on the still-pending real stable-tag test noted
+above. The channel-diff logic itself was unit-tested standalone (three
+cases: one channel changed, no change, manual override) before being
+committed.
+
+Everything in this phase now exists: `watch.yml`, `sync-rust.yml`,
+`release.yml`, `docker-image.yml`, `github.sh`. What remains is real-world
+validation once a genuine new stable Rust tag lands upstream.
 
 **Phase 4 — MOS backend sync.**
 `sync-mos-backend.yml` with deferral logic.

@@ -1,0 +1,318 @@
+# Publishes a rust-mos-sync release once versions.toml changes land on main
+# (normally via a sync-rust.yml PR being merged): a real build+test of the
+# changed channel(s) at STAGE=2, packaged and attached to a GitHub release,
+# plus the matching ghcr.io image (docker-image.yml, shared with build.yml).
+#
+#   stable -> immutable tag v<rust.stable.tag>-mos.<release.mos_revision>
+#   beta   -> single rolling pre-release, tag "beta" (assets replaced in
+#             place every time, like the existing llvm-cache/beta pattern)
+#
+# LLVM reuses build.yml's llvm-cache release the same way build.yml's own
+# llvm job does: on the common case (this channel's sync-rust.yml run just
+# built and cached the same key) this build is a download, not a rebuild.
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths: [versions.toml]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Channel to (re-)release; leave unset to auto-detect from the last push"
+        type: choice
+        options: ["", stable, beta]
+        default: ""
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  STAGE: "2"
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    outputs:
+      channels: ${{ steps.diff.outputs.channels }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Which channel(s) changed
+        id: diff
+        run: |
+          section_of() { sed -n "/^\[$2\]/,/^\[/p" "$1"; }
+
+          before="${{ github.event.before }}"
+          manual="${{ inputs.channel }}"
+          changed=()
+
+          if [ -n "$manual" ]; then
+              changed=("$manual")
+          else
+              old_stable="" old_beta=""
+              rm -f /tmp/before.toml
+              if [ -n "$before" ] && git cat-file -e "$before" 2>/dev/null; then
+                  git show "$before:versions.toml" > /tmp/before.toml 2>/dev/null || true
+              fi
+              if [ -s /tmp/before.toml ]; then
+                  old_stable=$(section_of /tmp/before.toml rust.stable)
+                  old_beta=$(section_of /tmp/before.toml rust.beta)
+              fi
+              new_stable=$(section_of versions.toml rust.stable)
+              new_beta=$(section_of versions.toml rust.beta)
+              if [ "$old_stable" != "$new_stable" ]; then changed+=("stable"); fi
+              if [ "$old_beta" != "$new_beta" ]; then changed+=("beta"); fi
+          fi
+
+          if [ "${#changed[@]}" -gt 0 ]; then
+              json="[$(printf '"%s",' "${changed[@]}" | sed 's/,$//')]"
+          else
+              json="[]"
+          fi
+          echo "channels=$json" >> "$GITHUB_OUTPUT"
+          echo "releasing: $json"
+
+  llvm:
+    needs: detect
+    if: needs.detect.outputs.channels != '[]'
+    strategy:
+      matrix:
+        channel: ${{ fromJson(needs.detect.outputs.channels) }}
+      fail-fast: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache key
+        id: key
+        run: |
+          key=$(scripts/build-llvm.sh --key "${{ matrix.channel }}")
+          asset="llvm-$key-x86_64-unknown-linux-gnu.tar.xz"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          if curl -sfIL -o /dev/null "https://github.com/$GITHUB_REPOSITORY/releases/download/llvm-cache/$asset"; then
+            echo "cached=true" >> "$GITHUB_OUTPUT"; echo "LLVM $key already in llvm-cache"
+          else
+            echo "cached=false" >> "$GITHUB_OUTPUT"; echo "LLVM $key must be built"
+          fi
+
+      - name: Free disk space
+        if: steps.key.outputs.cached != 'true'
+        run: .github/free-disk.sh
+
+      - name: Install build tools
+        if: steps.key.outputs.cached != 'true'
+        run: sudo apt-get update -q && sudo apt-get install -yq ninja-build lld ccache
+
+      - name: Restore ccache
+        if: steps.key.outputs.cached != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ccache-llvm-
+
+      - name: Fetch and patch LLVM
+        if: steps.key.outputs.cached != 'true'
+        run: |
+          scripts/fetch.sh llvm "${{ matrix.channel }}"
+          scripts/apply.sh llvm "base-${{ matrix.channel }}"
+
+      - name: Build LLVM
+        if: steps.key.outputs.cached != 'true'
+        env:
+          LLVM_NO_DOWNLOAD: "1"
+          LLVM_KEEP_GOING: "1"
+          LINK_JOBS: "2"
+          CCACHE_MAXSIZE: 3G
+        run: scripts/build-llvm.sh "${{ matrix.channel }}"
+
+      - name: Save ccache
+        if: always() && steps.key.outputs.cached != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Test tier 1 (llvm-lit MOS)
+        if: steps.key.outputs.cached != 'true'
+        run: scripts/test.sh llvm
+
+      - name: Package LLVM
+        if: steps.key.outputs.cached != 'true'
+        run: scripts/build-llvm.sh --package "${{ matrix.channel }}"
+
+      - name: Publish to the llvm-cache release
+        if: steps.key.outputs.cached != 'true'
+        run: |
+          gh release view llvm-cache >/dev/null 2>&1 || gh release create llvm-cache \
+            --prerelease --title "LLVM build cache" \
+            --notes "Patched LLVM installs keyed by scripts/build-llvm.sh --key. Not for end users."
+          gh release upload llvm-cache "work/${{ steps.key.outputs.asset }}" --clobber
+
+      - name: Hand LLVM to the rust job
+        if: steps.key.outputs.cached != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: llvm-${{ matrix.channel }}
+          path: work/${{ steps.key.outputs.asset }}
+          compression-level: 0
+          retention-days: 3
+
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/llvm-cmake.log work/llvm-build.log work/test-report.txt
+
+      - name: Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-llvm-logs-${{ matrix.channel }}
+          path: |
+            work/*.log
+            work/test-report.txt
+
+  rust:
+    needs: [detect, llvm]
+    strategy:
+      matrix:
+        channel: ${{ fromJson(needs.detect.outputs.channels) }}
+      fail-fast: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: .github/free-disk.sh
+
+      - name: Install build tools
+        run: sudo apt-get update -q && sudo apt-get install -yq ninja-build pkg-config libssl-dev
+
+      - name: LLVM from this run
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: llvm-${{ matrix.channel }}
+          path: llvm-dl
+
+      - name: Point build-llvm.sh at the LLVM of this run, if downloaded
+        run: |
+          [ -d llvm-dl ] && echo "LLVM_CACHE_URL=file://$GITHUB_WORKSPACE/llvm-dl" >> "$GITHUB_ENV" || true
+
+      - name: Fetch and patch Rust
+        run: |
+          scripts/fetch.sh rust "${{ matrix.channel }}"
+          scripts/apply.sh rust "base-${{ matrix.channel }}"
+
+      - name: Build rustc and the MOS libraries
+        run: scripts/build-rust.sh "${{ matrix.channel }}"
+
+      - name: Test tiers 2-5
+        run: scripts/test.sh std run size smoke
+
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/rust-build.log work/test-programs.log work/smoke.log work/test-report.txt
+
+      - name: Package toolchain
+        run: scripts/dist.sh "${{ matrix.channel }}"
+
+      - name: Render install.sh
+        run: |
+          . scripts/lib.sh
+          sed -e "s/@SDK_RELEASE@/$(ver_get llvm_mos_sdk.release)/" \
+              -e "s/@SDK_SHA256@/$(ver_get llvm_mos_sdk.sha256)/" \
+              config/install.sh.in > "work/install-${{ matrix.channel }}.sh"
+          chmod +x "work/install-${{ matrix.channel }}.sh"
+
+      - name: Checksum
+        run: |
+          asset=$(ls work/rust-mos-${{ matrix.channel }}-*.tar.xz)
+          sha256sum "$asset" > "$asset.sha256"
+
+      - name: Compute the release tag
+        id: tag
+        run: |
+          . scripts/lib.sh
+          if [ "${{ matrix.channel }}" = stable ]; then
+            tag="v$(ver_get rust.stable.tag)-mos.$(ver_get release.mos_revision)"
+            prerelease=false
+          else
+            tag="beta"
+            prerelease=true
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        run: |
+          asset=$(ls work/rust-mos-${{ matrix.channel }}-*.tar.xz)
+          title="rust-mos ${{ matrix.channel }} (${{ steps.tag.outputs.tag }})"
+          # Asset filenames are downloaded by exact name (install.sh.in / the
+          # README both reference install-<channel>.sh), so no #label here -
+          # a gh release upload label only changes the display name, not the
+          # download URL.
+          if gh release view "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+            gh release upload "${{ steps.tag.outputs.tag }}" \
+              "$asset" "$asset.sha256" "work/install-${{ matrix.channel }}.sh" --clobber
+          else
+            flags=(--title "$title" --notes-file work/test-report.txt)
+            if [ "${{ steps.tag.outputs.prerelease }}" = true ]; then flags+=(--prerelease); fi
+            gh release create "${{ steps.tag.outputs.tag }}" \
+              "$asset" "$asset.sha256" "work/install-${{ matrix.channel }}.sh" "${flags[@]}"
+          fi
+
+      - name: Upload toolchain for the docker job
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-${{ matrix.channel }}-x86_64-unknown-linux-gnu
+          path: work/rust-mos-*.tar.xz
+          compression-level: 0
+          retention-days: 3
+
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "Release build failed for ${{ matrix.channel }}." > /tmp/body.md
+          echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> /tmp/body.md
+          scripts/github.sh issue-open "release-failure-${{ matrix.channel }}" \
+            "release.yml: build failed for ${{ matrix.channel }}" /tmp/body.md
+
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-rust-logs-${{ matrix.channel }}
+          path: |
+            work/*.log
+            work/test-report.txt
+            work/size-current.json
+            work/rust/bootstrap.toml
+
+  docker:
+    needs: [detect, rust]
+    strategy:
+      matrix:
+        channel: ${{ fromJson(needs.detect.outputs.channels) }}
+      fail-fast: false
+    uses: ./.github/workflows/docker-image.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      channel: ${{ matrix.channel }}
+      artifact_name: toolchain-${{ matrix.channel }}-x86_64-unknown-linux-gnu
+      release: true
