@@ -1,0 +1,46 @@
+From c87219fd83ed4140de5bedabb49868dc2dfee508 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Wed, 30 Sep 2026 17:18:01 +0000
+Subject: [PATCH] bootstrap: cc-mos-vendor parses hyphenated MOS platform names
+
+mos-nes-nrom-none is four components to the generic cc target parser,
+which rejected it (unknown environment/ABI `none`) and failed the whole
+bootstrap before any compilation. MOS targets are always
+mos-<platform>-none, so take everything between as the vendor.
+---
+ .../cc-mos-vendor/src/target/parser.rs        | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/src/bootstrap/cc-mos-vendor/src/target/parser.rs b/src/bootstrap/cc-mos-vendor/src/target/parser.rs
+index 6526072b..3b7f6e68 100644
+--- a/src/bootstrap/cc-mos-vendor/src/target/parser.rs
++++ b/src/bootstrap/cc-mos-vendor/src/target/parser.rs
+@@ -279,6 +279,25 @@ pub(crate) fn from_rustc_target(target: &'a str) -> Result<Self, Error> {
+             )
+         })?;
+ 
++        // rust-mos-sync: MOS targets are `mos-<platform>-none`, where the
++        // platform itself may contain hyphens (`mos-nes-nrom-none`), which
++        // the generic splitting below would misread as extra components.
++        if arch == "mos" {
++            if let Some(platform) = target
++                .strip_prefix("mos-")
++                .and_then(|rest| rest.strip_suffix("-none"))
++            {
++                return Ok(Self {
++                    full_arch,
++                    arch,
++                    vendor: platform,
++                    os: "none",
++                    env: "",
++                    abi: "",
++                });
++            }
++        }
++
+         // Newer target names have begun omitting the vendor, so the only
+         // component we know must be there is the OS name.
+         let components: Vec<_> = components.collect();
+-- 
+2.47.3
+
