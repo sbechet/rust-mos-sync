@@ -80,11 +80,17 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
 1. **More built-in platform targets.** The community uses `mos-<platform>-none`
    named after the SDK platform (vendor = platform, linker
    `mos-<platform>-clang`): most used `mos-c64-none` (done), `mos-sim-none`
-   (done), then `mos-mega65-none`, `mos-atari8-dos-none`, `mos-nes-nrom-none`,
-   `mos-cx16-none`. The CPU differs per platform (mega65: 45GS02, cx16: 65C02,
-   pce: HuC6280), so each built-in target sets its `cpu`. Every target costs a
-   rust-std build in CI (minutes); custom JSON targets remain possible for the
-   rest but need nightly features, so built-ins are the stable-friendly path.
+   (done), `mos-nes-nrom-none` and `mos-atari8-dos-none` (done, patch
+   `0005-rust_target-Add-NES-and-Atari-8-bit-MOS-platform-ta.patch` -
+   both plain `mos6502` like c64/sim, no new callconv/arch code, and
+   `build-rust.sh`/`test.sh` pick them up automatically since they discover
+   `mos-*` targets from `rustc_target/src/spec/mod.rs` rather than a
+   hardcoded list). Still open: `mos-mega65-none`, `mos-cx16-none` - the CPU
+   differs per platform there (mega65: 45GS02, cx16: 65C02), so each needs
+   its own `cpu` in a small `base::mos::target` variant, unlike nes/atari8.
+   Every target costs a rust-std build in CI (minutes); custom JSON targets
+   remain possible for the rest but need nightly features, so built-ins are
+   the stable-friendly path.
 2. **compiler_builtins vs. the SDK runtime.** For no_std targets bootstrap enables
    `compiler-builtins-mem`, so the Rust `memcpy`/`memset`/`memcmp`, soft-float
    and integer helpers are linked (weak symbols). rust-mos cfg'd them out on MOS
