@@ -53,6 +53,8 @@ ENV PATH="/opt/rust-mos/bin:/opt/llvm-mos/bin:${PATH}"
 ENV CARGO_TARGET_MOS_UNKNOWN_NONE_LINKER=/opt/llvm-mos/bin/mos-clang
 ENV CARGO_TARGET_MOS_SIM_NONE_LINKER=/opt/llvm-mos/bin/mos-sim-clang
 ENV CARGO_TARGET_MOS_C64_NONE_LINKER=/opt/llvm-mos/bin/mos-c64-clang
+ENV CARGO_TARGET_MOS_NES_NROM_NONE_LINKER=/opt/llvm-mos/bin/mos-nes-nrom-clang
+ENV CARGO_TARGET_MOS_ATARI8_DOS_NONE_LINKER=/opt/llvm-mos/bin/mos-atari8-dos-clang
 
 WORKDIR /src
 CMD ["cargo", "--version"]
