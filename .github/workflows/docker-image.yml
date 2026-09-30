@@ -94,9 +94,14 @@ jobs:
           [ "$out" = "$(cat tests/programs/hello/expected.stdout)" ] \
             || { echo "unexpected output: $out"; exit 1; }
 
-      - name: Smoke test — build for the link-only platforms (no emulator in CI)
+      - name: Smoke test — build for every link-only platform (no emulator in CI)
         run: |
-          for t in mos-c64-none mos-nes-nrom-none mos-atari8-dos-none; do
+          # mos-unknown-none has no real SDK platform to link against and
+          # mos-sim-none is already build+run tested above; every other
+          # built-in MOS target is link-only here (rustc_target/src/spec/mod.rs).
+          targets=$(docker run --rm rust-mos:smoke-test rustc --print target-list \
+            | grep '^mos-' | grep -v -e mos-unknown-none -e mos-sim-none)
+          for t in $targets; do
             docker run --rm -v "$PWD/tests/programs/hello:/src" rust-mos:smoke-test \
               cargo build --release --target "$t"
           done
