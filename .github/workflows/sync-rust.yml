@@ -1,0 +1,196 @@
+# Syncs a Rust channel (stable or beta) to its latest upstream tag/commit,
+# when detect.sh says the LLVM branch hasn't changed (PLAN.md §7.2). Manual
+# for now (workflow_dispatch); watch.yml will dispatch it automatically once
+# it exists. A different LLVM branch (llvm-bump territory, Phase 6) or a
+# patch conflict (Claude Code resolution, Phase 5) both just open an issue
+# and stop - neither is automated yet.
+name: sync-rust
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Rust channel to sync"
+        type: choice
+        options: [stable, beta]
+        default: stable
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: sync-rust-${{ inputs.channel }}
+  cancel-in-progress: false
+
+env:
+  CHANNEL: ${{ inputs.channel }}
+  STAGE: "1"
+  GH_TOKEN: ${{ github.token }}
+  FAIL_LABEL: sync-rust-failure-${{ inputs.channel }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need main's history to branch off cleanly
+
+      - name: Free disk space
+        run: .github/free-disk.sh
+
+      - name: Install build tools
+        run: sudo apt-get update -q && sudo apt-get install -yq ninja-build lld ccache pkg-config libssl-dev
+
+      - name: git identity for the commit this workflow makes
+        run: |
+          git config user.name "rust-mos-sync[bot]"
+          git config user.email "rust-mos-sync-bot@users.noreply.github.com"
+
+      - name: What does this channel need?
+        id: detect
+        run: |
+          line=$(scripts/detect.sh --rust-only | awk -v ch="$CHANNEL" '$3 == ch {print; exit}')
+          if [ -z "$line" ]; then
+            echo "$CHANNEL is already up to date with versions.toml"
+            echo "todo=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          read -r _ kind _ ref llvm_branch llvm_commit <<< "$line"
+          echo "todo=$kind" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "llvm_branch=$llvm_branch" >> "$GITHUB_OUTPUT"
+          echo "llvm_commit=$llvm_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Note an LLVM bump is needed (not automated yet, Phase 6)
+        if: steps.detect.outputs.todo == 'llvm-bump'
+        run: |
+          cat > /tmp/issue.md <<EOF
+          detect.sh found a new Rust $CHANNEL (${{ steps.detect.outputs.ref }}) whose
+          LLVM branch changed to \`${{ steps.detect.outputs.llvm_branch }}\`
+          (commit \`${{ steps.detect.outputs.llvm_commit }}\`) - an LLVM bump,
+          which \`llvm-bump.yml\` (PLAN.md §7.4, Phase 6) will handle once it
+          exists. Nothing done here; re-run this workflow after the bump lands.
+          EOF
+          scripts/github.sh issue-open "llvm-bump-needed-$CHANNEL" \
+            "LLVM bump needed for $CHANNEL (${{ steps.detect.outputs.ref }})" /tmp/issue.md
+
+      # From here on, only the sync-rust case (same LLVM branch) proceeds.
+      - name: Bump versions.toml
+        if: steps.detect.outputs.todo == 'sync-rust'
+        run: |
+          . scripts/lib.sh
+          if [ "$CHANNEL" = stable ]; then
+            ver_set rust.stable.tag "${{ steps.detect.outputs.ref }}"
+            ver_set release.mos_revision 1
+          else
+            ver_set rust.beta.commit "${{ steps.detect.outputs.ref }}"
+          fi
+          ver_set "rust.$CHANNEL.llvm_branch" "${{ steps.detect.outputs.llvm_branch }}"
+          ver_set "rust.$CHANNEL.llvm_commit" "${{ steps.detect.outputs.llvm_commit }}"
+          branch="sync/rust-$CHANNEL-$(echo "${{ steps.detect.outputs.ref }}" | cut -c1-12)"
+          echo "BRANCH=$branch" >> "$GITHUB_ENV"
+          git checkout -q -b "$branch"
+          git commit -q -am "versions.toml: bump rust.$CHANNEL to ${{ steps.detect.outputs.ref }}"
+
+      - name: Fetch and patch LLVM
+        if: steps.detect.outputs.todo == 'sync-rust'
+        run: |
+          scripts/fetch.sh llvm "$CHANNEL"
+          scripts/apply.sh llvm "base-$CHANNEL"
+
+      - name: Build LLVM (cache hit expected, same branch as before)
+        if: steps.detect.outputs.todo == 'sync-rust'
+        env:
+          LLVM_KEEP_GOING: "1"
+          LINK_JOBS: "2"
+        run: scripts/build-llvm.sh "$CHANNEL"
+
+      - name: Test tier 1 (llvm-lit MOS)
+        if: steps.detect.outputs.todo == 'sync-rust'
+        run: scripts/test.sh llvm
+
+      - name: Fetch and patch Rust
+        if: steps.detect.outputs.todo == 'sync-rust'
+        id: apply_rust
+        run: |
+          scripts/fetch.sh rust "$CHANNEL"
+          scripts/apply.sh rust "base-$CHANNEL"
+
+      - name: Note a patch conflict (not automated yet, Phase 5)
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'failure'
+        run: |
+          cat > /tmp/issue.md <<EOF
+          \`scripts/apply.sh rust base-$CHANNEL\` could not apply \`patches/rust/\`
+          on ${{ steps.detect.outputs.ref }} (exit 2: conflict). Automatic
+          resolution (\`ci/claude/resolve-rust.md\`, PLAN.md §8, Phase 5) is not
+          enabled yet - this needs a manual rebase of the patch series.
+
+          \`\`\`
+          $(cd work/rust && git status --short 2>/dev/null | grep -E '^(UU|AA|DU|UD|DD|AU|UA) ' || echo '(work/rust not on this runner)')
+          \`\`\`
+          EOF
+          scripts/github.sh issue-open "$FAIL_LABEL" \
+            "rust patch conflict on $CHANNEL ${{ steps.detect.outputs.ref }}" /tmp/issue.md
+
+      - name: Build rustc and the MOS libraries
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
+        run: scripts/build-rust.sh "$CHANNEL"
+
+      - name: Test tiers 2-5
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
+        run: scripts/test.sh std run size smoke
+
+      - name: Regenerate patches (should be a no-op)
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
+        run: |
+          scripts/regen-patches.sh llvm
+          scripts/regen-patches.sh rust
+          git add patches
+          git diff --cached --quiet patches || git commit -q -m "patches: regenerate after the $CHANNEL sync"
+
+      - name: Package toolchain
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
+        run: scripts/dist.sh "$CHANNEL"
+
+      - name: Push branch and open the PR
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
+        run: |
+          git push -q -u origin "$BRANCH"
+          {
+            echo "Automated sync: rust.$CHANNEL -> ${{ steps.detect.outputs.ref }}"
+            echo
+            echo '```'
+            cat work/test-report.txt
+            echo '```'
+          } > /tmp/pr-body.md
+          scripts/github.sh pr-open "$BRANCH" \
+            "sync: rust.$CHANNEL -> ${{ steps.detect.outputs.ref }}" /tmp/pr-body.md
+          scripts/github.sh issue-close "$FAIL_LABEL" "Fixed by $BRANCH."
+
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/llvm-cmake.log work/llvm-build.log work/rust-build.log work/test-programs.log work/smoke.log work/test-report.txt
+
+      # The patch-conflict step above already reported that specific failure;
+      # this is for everything else (build/test/dist, or detect/bump itself).
+      - name: Report an unexpected failure
+        if: failure() && steps.apply_rust.outcome != 'failure'
+        run: |
+          echo "See the [failed run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for logs." > /tmp/issue.md
+          scripts/github.sh issue-open "$FAIL_LABEL" \
+            "sync-rust failed on $CHANNEL ${{ steps.detect.outputs.ref }}" /tmp/issue.md
+
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-rust-${{ env.CHANNEL }}-logs
+          path: |
+            work/*.log
+            work/test-report.txt
+            work/rust/bootstrap.toml
+          if-no-files-found: ignore

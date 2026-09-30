@@ -241,9 +241,20 @@ The packaging logic itself was proven in CI before being factored out into
 `dist.sh` ([run 36631014475](https://github.com/sbechet/rust-mos-sync/actions/runs/36631014475));
 the refactor should be a no-op but has not been independently re-verified yet.
 
-**Phase 3 — CI for Rust syncs and releases. In progress: Docker image done.**
+**Phase 3 — CI for Rust syncs and releases. In progress: Docker image, `detect.sh`, `github.sh`, `watch.yml`, `sync-rust.yml` done, not yet exercised end to end.**
 `watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
 *Done when:* a new Rust point release produces a PR and, after merge, a published toolchain without intervention (Claude Code not yet enabled).
+Two one-time maintainer setup steps needed before this is fully automatic:
+1. Create the GitHub labels `sync-rust-failure-stable`, `sync-rust-failure-beta`,
+   `llvm-bump-needed-stable`, `llvm-bump-needed-beta`, `watch-pending` on the
+   repo (`gh issue create --label X` errors if the label doesn't exist yet).
+2. Optional, for `watch.yml` to dispatch `sync-rust.yml` automatically: add a
+   repo secret `WORKFLOW_DISPATCH_TOKEN` holding a fine-grained PAT with this
+   repo's Actions read/write (`GITHUB_TOKEN` cannot dispatch another
+   workflow's `workflow_dispatch` - a deliberate GitHub restriction).
+   Without it, `watch.yml` still runs daily and opens a tracking issue
+   listing what's pending, for `sync-rust.yml` to be run by hand instead.
+
 `docker/Dockerfile` and the `docker` job of `build.yml` were built ahead of
 the rest of this phase (maintainer's call, 2026-09-30) since a working
 toolchain from Phase 1-2 was already enough to build and smoke-test it; it

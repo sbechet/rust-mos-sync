@@ -1,0 +1,72 @@
+# Daily detection (PLAN.md §7.1): runs detect.sh's full check and dispatches
+# sync-rust.yml for whichever channel(s) need it.
+#
+# GitHub's default GITHUB_TOKEN cannot dispatch another workflow's
+# workflow_dispatch event (a deliberate anti-loop restriction on the token
+# itself, not on the method used) - only a personal access token can. If the
+# maintainer adds a fine-grained PAT with this repo's Actions:Read and write
+# permission as the repo secret WORKFLOW_DISPATCH_TOKEN, this workflow
+# dispatches sync-rust.yml automatically. Without it, it still runs and is
+# still useful: it opens/updates a single tracking issue listing what's
+# pending, for the maintainer to run sync-rust.yml manually.
+name: watch
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HAVE_PAT: ${{ secrets.WORKFLOW_DISPATCH_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: detect.sh (full check)
+        id: detect
+        run: |
+          scripts/detect.sh | tee /tmp/actions.txt
+          echo "found=$([ -s /tmp/actions.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch sync-rust.yml automatically
+        if: steps.detect.outputs.found == 'true' && env.HAVE_PAT == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+        run: |
+          while read -r _ kind channel _rest; do
+            [ "$kind" = "sync-rust" ] || continue
+            echo "dispatching sync-rust.yml for $channel"
+            gh workflow run sync-rust.yml -f "channel=$channel"
+          done < /tmp/actions.txt
+
+      - name: Track what's pending (no dispatch token configured)
+        if: steps.detect.outputs.found == 'true' && env.HAVE_PAT != 'true'
+        run: |
+          {
+            echo "detect.sh found the following pending as of $(date -u +%F):"
+            echo
+            echo '```'
+            cat /tmp/actions.txt
+            echo '```'
+            echo
+            echo "No \`WORKFLOW_DISPATCH_TOKEN\` repo secret is configured, so this"
+            echo "wasn't dispatched automatically - run the relevant workflow by hand"
+            echo "(\`sync-rust.yml\` for a \`sync-rust\` line; the others aren't built yet)."
+          } > /tmp/issue.md
+          scripts/github.sh issue-open watch-pending "Pending upstream syncs" /tmp/issue.md
+
+      - name: Nothing pending, close the tracking issue if any
+        if: steps.detect.outputs.found == 'false'
+        run: scripts/github.sh issue-close watch-pending "Nothing pending anymore."
