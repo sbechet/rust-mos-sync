@@ -226,5 +226,11 @@ jobs:
       contents: read
       packages: write
     with:
-      channel: ${{ env.CHANNEL }}
-      artifact_name: toolchain-${{ env.CHANNEL }}-x86_64-unknown-linux-gnu
+      # A reusable-workflow call's `with:` only sees github/needs/strategy/
+      # matrix/inputs/vars - not `env`, so this repeats CHANNEL's own
+      # definition instead of reading it (that's what silently broke every
+      # push/pull_request run of this workflow: an invalid workflow file
+      # fails with zero jobs, not a step failure - workflow_dispatch runs
+      # looked fine since `inputs` resolved either way).
+      channel: ${{ inputs.channel || 'stable' }}
+      artifact_name: toolchain-${{ inputs.channel || 'stable' }}-x86_64-unknown-linux-gnu
