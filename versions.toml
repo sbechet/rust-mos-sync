@@ -15,7 +15,7 @@ llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
 
 [llvm_mos]
 base_merge = "cdfebee3c9da537c00e74a650aa8fa5201a97c6f"   # upstream parent ecd2b6862c31
-last_synced = ""
+last_synced = "cdfebee3c9da537c00e74a650aa8fa5201a97c6f"
 deferred = []
 
 [llvm_mos_sdk]
