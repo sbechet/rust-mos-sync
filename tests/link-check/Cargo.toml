@@ -1,0 +1,15 @@
+# Link-only check for every MOS platform target (docker-image.yml smoke test).
+# Unlike tests/programs/hello it calls no libc function: some platforms have
+# no console (Atari 2600 has no putchar), so this only proves the target
+# spec, the SDK driver and the platform linker script work together.
+[package]
+name = "link-check"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
