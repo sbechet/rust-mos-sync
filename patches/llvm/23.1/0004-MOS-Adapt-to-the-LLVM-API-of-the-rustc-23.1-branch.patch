@@ -11,11 +11,15 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
 - GlobalISel: G_CTLZ/CTTZ_ZERO_UNDEF became _ZERO_POISON, the legacy legalizer
   tables are gone (no computeTables), and LegalizerHelper::lowerMemcpyInline
   is folded into lowerMemCpyFamily (which handles G_MEMCPY_INLINE).
+- TargetMachine::getMCAsmInfo returns a reference, and
+  MCStreamer::emitCodeAlignment takes the subtarget by reference.
 ---
- llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp | 4 ++--
- llvm/lib/Target/MOS/MOSLegalizerInfo.cpp       | 5 ++---
- llvm/lib/Target/MOS/MOSTargetMachine.cpp       | 4 ----
- 3 files changed, 4 insertions(+), 9 deletions(-)
+ llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp        | 4 ++--
+ llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp | 2 +-
+ llvm/lib/Target/MOS/MOSInstrInfo.cpp                  | 2 +-
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp              | 5 ++---
+ llvm/lib/Target/MOS/MOSTargetMachine.cpp              | 4 ----
+ 5 files changed, 6 insertions(+), 11 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -32,6 +36,32 @@ index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974
      MCAsmParserExtension::Initialize(Parser);
      MRI = getContext().getRegisterInfo();
  
+diff --git a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
+index 77cf4e82743c8779be8f55b86e72faf152f040b1..b662ffd1a8fff760020b440cab942ce708aa43bd 100644
+--- a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
++++ b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
+@@ -37,7 +37,7 @@ void MOSMCELFStreamer::initSections(const MCSubtargetInfo &STI) {
+ 
+   MCContext &Ctx = getContext();
+   switchSection(Ctx.getObjectFileInfo()->getTextSection());
+-  emitCodeAlignment(Align(1), &STI);
++  emitCodeAlignment(Align(1), STI);
+ }
+ 
+ static bool HasPrefix(StringRef Name, StringRef Prefix) {
+diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.cpp b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
+index 42a94c356e6769d816d7877162c94cef1e67beee..860ff03a3676c3857e2eaef5ea316def8ae5d1bd 100644
+--- a/llvm/lib/Target/MOS/MOSInstrInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
+@@ -205,7 +205,7 @@ unsigned MOSInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
+     return 0;
+ 
+   const MachineFunction &MF = *MI.getParent()->getParent();
+-  const MCAsmInfo &MCAI = *MF.getTarget().getMCAsmInfo();
++  const MCAsmInfo &MCAI = MF.getTarget().getMCAsmInfo();
+ 
+   switch (MI.getOpcode()) {
+   default: {
 diff --git a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
 index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..be9cb27cbf114039f939d836b78cb81b3b1b1e69 100644
 --- a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
