@@ -13,13 +13,15 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
   is folded into lowerMemCpyFamily (which handles G_MEMCPY_INLINE).
 - TargetMachine::getMCAsmInfo returns a reference, and
   MCStreamer::emitCodeAlignment takes the subtarget by reference.
+- MCAsmInfoELF has no default constructor: it takes the MCTargetOptions.
 ---
  llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp        | 4 ++--
+ llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp     | 3 ++-
  llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp | 2 +-
  llvm/lib/Target/MOS/MOSInstrInfo.cpp                  | 2 +-
  llvm/lib/Target/MOS/MOSLegalizerInfo.cpp              | 5 ++---
  llvm/lib/Target/MOS/MOSTargetMachine.cpp              | 4 ----
- 5 files changed, 6 insertions(+), 11 deletions(-)
+ 6 files changed, 8 insertions(+), 12 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -36,6 +38,20 @@ index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974
      MCAsmParserExtension::Initialize(Parser);
      MRI = getContext().getRegisterInfo();
  
+diff --git a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp
+index 2b8a68ca81000e74cfdd8e97d2cbac6ac1e35d3b..04acf974fba6e32d83a2ff39df871c94319d5c23 100644
+--- a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp
++++ b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp
+@@ -34,7 +34,8 @@ static const MCAsmInfo::AtSpecifier AtSpecifiers[] = {
+     {MOSMCExpr::VK_ADDR13, "mos13"},
+ };
+ 
+-MOSMCAsmInfo::MOSMCAsmInfo(const Triple &TT, const MCTargetOptions &Options) {
++MOSMCAsmInfo::MOSMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
++    : MCAsmInfoELF(Options) {
+   // While the platform uses 2-byte pointers, the ELF files use 4-byte pointers
+   // to convey banking information; this field is used, among others, by the
+   // DWARF debug structures.
 diff --git a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
 index 77cf4e82743c8779be8f55b86e72faf152f040b1..b662ffd1a8fff760020b440cab942ce708aa43bd 100644
 --- a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
