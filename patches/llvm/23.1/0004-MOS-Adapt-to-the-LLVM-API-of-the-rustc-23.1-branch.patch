@@ -14,14 +14,16 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
 - TargetMachine::getMCAsmInfo returns a reference, and
   MCStreamer::emitCodeAlignment takes the subtarget by reference.
 - MCAsmInfoELF has no default constructor: it takes the MCTargetOptions.
+- -gen-callingconv output is guarded by GET_CALLING_CONV_IMPL now.
 ---
  llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp        | 4 ++--
  llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp     | 3 ++-
  llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp | 2 +-
+ llvm/lib/Target/MOS/MOSCallingConv.cpp                | 1 +
  llvm/lib/Target/MOS/MOSInstrInfo.cpp                  | 2 +-
  llvm/lib/Target/MOS/MOSLegalizerInfo.cpp              | 5 ++---
  llvm/lib/Target/MOS/MOSTargetMachine.cpp              | 4 ----
- 6 files changed, 8 insertions(+), 12 deletions(-)
+ 7 files changed, 9 insertions(+), 12 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -65,6 +67,16 @@ index 77cf4e82743c8779be8f55b86e72faf152f040b1..b662ffd1a8fff760020b440cab942ce7
  }
  
  static bool HasPrefix(StringRef Name, StringRef Prefix) {
+diff --git a/llvm/lib/Target/MOS/MOSCallingConv.cpp b/llvm/lib/Target/MOS/MOSCallingConv.cpp
+index 993ce3787622a7be8edc654c0a3941f431ca782a..9b5546351485521bee0ebbd65c7462a41249018c 100644
+--- a/llvm/lib/Target/MOS/MOSCallingConv.cpp
++++ b/llvm/lib/Target/MOS/MOSCallingConv.cpp
+@@ -15,4 +15,5 @@
+ #include "llvm/CodeGen/MachineFunction.h"
+ #include "llvm/IR/DataLayout.h"
+ 
++#define GET_CALLING_CONV_IMPL
+ #include "MOSGenCallingConv.inc"
 diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.cpp b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
 index 42a94c356e6769d816d7877162c94cef1e67beee..860ff03a3676c3857e2eaef5ea316def8ae5d1bd 100644
 --- a/llvm/lib/Target/MOS/MOSInstrInfo.cpp
