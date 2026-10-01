@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Thu, 1 Oct 2026 12:51:07 +0000
+Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
+
+TargetMachine::resetTargetOptions was removed upstream; per-function code
+generation flags no longer live in TargetOptions, so there is nothing to
+reset before creating a subtarget.
+---
+ llvm/lib/Target/MOS/MOSTargetMachine.cpp | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/llvm/lib/Target/MOS/MOSTargetMachine.cpp b/llvm/lib/Target/MOS/MOSTargetMachine.cpp
+index 3bb679dac9c3bb5b639990d52bb89e849c02a04d..aaa39b872147c2fedbb0a46e7d195d0057db6832 100644
+--- a/llvm/lib/Target/MOS/MOSTargetMachine.cpp
++++ b/llvm/lib/Target/MOS/MOSTargetMachine.cpp
+@@ -113,10 +113,6 @@ MOSTargetMachine::getSubtargetImpl(const Function &F) const {
+ 
+   auto &I = SubtargetMap[CPU + FS];
+   if (!I) {
+-    // This needs to be done before we create a new subtarget since any
+-    // creation will depend on the TM and the code generation flags on the
+-    // function that reside in TargetOptions.
+-    resetTargetOptions(F);
+     I = std::make_unique<MOSSubtarget>(TargetTriple, CPU, FS, *this);
+   }
+   return I.get();
