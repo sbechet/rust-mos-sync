@@ -43,6 +43,26 @@ need() {
     done
 }
 
+# llvm_version_of_branch <rustc/NN.N-date>  ->  NN.N
+llvm_version_of_branch() { sed -n 's#^rustc/\([0-9]*\.[0-9]*\)-.*#\1#p' <<<"$1"; }
+
+# llvm_series_dir <channel> [--allow-missing]
+# patches/llvm/<NN.N>: the MOS patch series for that channel's LLVM branch.
+# Dies if there is none (that channel needs an llvm-bump first) unless
+# --allow-missing: building LLVM with no series would silently drop MOS.
+# One directory per LLVM version, so stable can stay on the old branch while
+# beta's bump is prepared (PLAN.md §3.5).
+llvm_series_dir() {
+    local channel="$1" branch ver
+    branch=$(ver_get "rust.$1.llvm_branch")
+    ver=$(llvm_version_of_branch "$branch")
+    [ -n "$ver" ] || die "rust.$1.llvm_branch ('$branch') is not a rustc/NN.N-date branch"
+    if [ "${2:-}" != --allow-missing ] && ! ls "$ROOT/patches/llvm/$ver"/*.patch >/dev/null 2>&1; then
+        die "no MOS patch series for $channel's LLVM branch $branch (patches/llvm/$ver); it needs an llvm-bump" "$EXIT_CONFLICT"
+    fi
+    echo "$ROOT/patches/llvm/$ver"
+}
+
 # ver_get <dotted.key>        e.g. ver_get rust.stable.tag
 # Prints the value; arrays are printed one element per line. Empty if unset.
 ver_get() {
