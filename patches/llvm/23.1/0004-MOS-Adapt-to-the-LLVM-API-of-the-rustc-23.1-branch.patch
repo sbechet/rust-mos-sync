@@ -8,10 +8,14 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
   reset before creating a subtarget.
 - MCTargetAsmParser and the MCAsmParser constructor registered by
   RegisterMCAsmParser no longer take MCTargetOptions.
+- GlobalISel: G_CTLZ/CTTZ_ZERO_UNDEF became _ZERO_POISON, the legacy legalizer
+  tables are gone (no computeTables), and LegalizerHelper::lowerMemcpyInline
+  is folded into lowerMemCpyFamily (which handles G_MEMCPY_INLINE).
 ---
  llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp | 4 ++--
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp       | 5 ++---
  llvm/lib/Target/MOS/MOSTargetMachine.cpp       | 4 ----
- 2 files changed, 2 insertions(+), 6 deletions(-)
+ 3 files changed, 4 insertions(+), 9 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -28,6 +32,36 @@ index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974
      MCAsmParserExtension::Initialize(Parser);
      MRI = getContext().getRegisterInfo();
  
+diff --git a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..be9cb27cbf114039f939d836b78cb81b3b1b1e69 100644
+--- a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+@@ -255,7 +255,7 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+   getActionDefinitionsBuilder({G_FSHL, G_FSHR}).lower();
+ 
+   getActionDefinitionsBuilder(
+-      {G_CTLZ, G_CTTZ, G_CTPOP, G_CTLZ_ZERO_UNDEF, G_CTTZ_ZERO_UNDEF})
++      {G_CTLZ, G_CTTZ, G_CTPOP, G_CTLZ_ZERO_POISON, G_CTTZ_ZERO_POISON})
+       .lower();
+ 
+   // Floating Point Operations
+@@ -384,7 +384,6 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+       .maxScalar(0, S8)
+       .unsupported();
+ 
+-  getLegacyLegalizerInfo().computeTables();
+   verify(*STI.getInstrInfo());
+ }
+ 
+@@ -2000,7 +1999,7 @@ bool MOSLegalizerInfo::legalizeMemOp(LegalizerHelper &Helper,
+ 
+   // Try lowering, keeping in mind the size limit.
+   if (IsInline) {
+-    Result = Helper.lowerMemcpyInline(MI);
++    Result = Helper.lowerMemCpyFamily(MI);
+   } else {
+     Result = Helper.lowerMemCpyFamily(MI, SizeLimit);
+   }
 diff --git a/llvm/lib/Target/MOS/MOSTargetMachine.cpp b/llvm/lib/Target/MOS/MOSTargetMachine.cpp
 index 3bb679dac9c3bb5b639990d52bb89e849c02a04d..aaa39b872147c2fedbb0a46e7d195d0057db6832 100644
 --- a/llvm/lib/Target/MOS/MOSTargetMachine.cpp
