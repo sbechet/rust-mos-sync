@@ -11,10 +11,10 @@ commits of the current toolchain.
 
 MOS targets are `#![no_std]`: they ship `core` and `alloc`, never `std`.
 
-Status: Phases 1-2 of [PLAN.md](PLAN.md) done (a built toolchain runs
-`tests/programs/hello` on `mos-sim`, with vanilla `cargo`); Phase 3 (CI syncs
-and releases) in progress - the Docker image below is already built and
-published. See [docs/git-and-distribution.md](docs/git-and-distribution.md)
+Status: Phases 1-3 of [PLAN.md](PLAN.md) implemented (a built toolchain runs
+`tests/programs/hello` on `mos-sim`, with vanilla `cargo`; CI syncs and
+releases exist but have not yet run for a real new Rust release). The Docker
+image below is already built and published. See [docs/git-and-distribution.md](docs/git-and-distribution.md)
 for the full binary distribution plan.
 
 ## Using the Docker image
@@ -99,11 +99,36 @@ docker run --rm -v "$PWD":/src -w /src ghcr.io/sbechet/rust-mos:stable \
 of exactly this (`putchar`-based output, no platform needed) if you want a
 reference to start from.
 
-### Other built-in targets
+### Built-in targets
 
-`mos-unknown-none` (no specific platform - your own linker script, for a
-fully self-contained program) is also built in. To list every target the
-image currently supports:
+Every platform of the llvm-mos SDK is a built-in target, named
+`mos-<platform>-none` after the SDK driver `mos-<platform>-clang` that links
+it (the image already points each `CARGO_TARGET_*_LINKER` at the right one):
+
+| Platform | Targets |
+|---|---|
+| Commodore | `mos-c64-none`, `mos-c128-none`, `mos-vic20-none`, `mos-pet-none`, `mos-geos-cbm-none` |
+| Nintendo NES | `mos-nes-<mapper>-none` with mapper `nrom`, `cnrom`, `gtrom`, `mmc1`, `mmc3`, `unrom`, `unrom-512` or `action53`; `mos-fds-none` (Famicom Disk System) |
+| Atari 8-bit | `mos-atari8-dos-none`, `mos-atari8-cart-std-none`, `mos-atari8-cart-xegs-none`, `mos-atari8-cart-megacart-none` |
+| Other Atari | `mos-atari2600-4k-none`, `mos-atari2600-3e-none`, `mos-atari5200-supercart-none`, `mos-lynx-bll-none` |
+| Other machines | `mos-a2-none` (Apple II; not `apple2`, see below), `mos-cx16-none` (Commander X16), `mos-mega65-none`, `mos-pce-none` / `mos-pce-cd-none` (PC Engine), `mos-osi-c1p-none`, `mos-supervision-none`, `mos-neo6502-none`, `mos-rp6502-none`, `mos-rpc8e-none`, `mos-eater-none`, `mos-dodo-none`, `mos-cpm65-none` |
+| No platform | `mos-sim-none` (llvm-mos simulator), `mos-unknown-none` (your own linker script, fully self-contained program) |
+
+Each target sets the CPU its platform's SDK driver uses by default (plain
+`mos6502` for most; 65C02, 65EL02, 45GS02 or HuC6280 where the machine has
+one). Notes:
+
+- `mos-a2-none` is not called `mos-apple2-none` because rustc's bootstrap
+  treats any target name containing "apple" as an Apple platform.
+- Building for another platform works exactly like the C64 example above,
+  only `--target` changes; the output file is whatever format that SDK driver
+  produces. Not every platform has a console: `putchar` does not link on the
+  Atari 2600, for instance, so `tests/programs/hello` is `mos-sim-none` only.
+  `tests/link-check` (no libc call) is what CI links on every platform.
+- A crate whose `build.rs` uses the `cc` crate will not find a C compiler for
+  these targets (`cc` does not know the `mos` architecture upstream yet).
+
+To list what the image supports:
 
 ```sh
 docker run --rm ghcr.io/sbechet/rust-mos:stable rustc --print target-list | grep ^mos-
