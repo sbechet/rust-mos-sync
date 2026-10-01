@@ -1,4 +1,5 @@
 # Syncs a Rust channel (stable or beta) to its latest upstream tag/commit,
+# then merges its own PR and dispatches release.yml once every test passed,
 # when detect.sh says the LLVM branch hasn't changed (PLAN.md §7.2). Manual
 # for now (workflow_dispatch); watch.yml will dispatch it automatically once
 # it exists. A different LLVM branch (llvm-bump territory, Phase 6) or a
@@ -19,6 +20,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: write   # dispatch release.yml after the auto-merge
 
 concurrency:
   group: sync-rust-${{ inputs.channel }}
@@ -170,6 +172,17 @@ jobs:
           scripts/github.sh pr-open "$BRANCH" \
             "sync: rust.$CHANNEL -> ${{ steps.detect.outputs.ref }}" /tmp/pr-body.md
           scripts/github.sh issue-close "$FAIL_LABEL" "Fixed by $BRANCH."
+
+      # PLAN.md §10: a rust-only sync auto-merges once every test tier passed
+      # (they did, or the steps above would have stopped the job). A merge made
+      # with GITHUB_TOKEN does not fire release.yml's push trigger (GitHub never
+      # chains workflows from that token), so it is dispatched explicitly -
+      # workflow_dispatch is the one event GITHUB_TOKEN may still raise.
+      - name: Merge the PR and release
+        if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
+        run: |
+          scripts/github.sh pr-merge "$BRANCH"
+          gh workflow run release.yml --ref main -f channel="$CHANNEL"
 
       - name: Errors as annotations
         if: failure()

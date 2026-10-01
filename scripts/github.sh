@@ -11,6 +11,10 @@
 #   pr-open <branch> <title> <body-file>
 #       Opens a PR from <branch> to main, or updates the existing one if a
 #       PR from that branch is already open. Prints the PR URL.
+#   pr-merge <branch>
+#       Squash-merges the open PR from <branch> into main and deletes the
+#       branch. For PRs whose tests already passed in the job that opened
+#       them (PLAN.md §10: rust-only syncs auto-merge when every tier passes).
 #   issue-open <label> <title> <body-file>
 #       Opens a new tracking issue with <label>, or comments on the one
 #       already open with it instead of duplicating (PLAN.md §10: "a single
@@ -24,7 +28,7 @@
 . "$(dirname "$0")/lib.sh"
 need gh
 
-cmd="${1:?usage: github.sh <pr-open|issue-open|issue-close> ...}"
+cmd="${1:?usage: github.sh <pr-open|pr-merge|issue-open|issue-close> ...}"
 shift
 
 case "$cmd" in
@@ -40,6 +44,10 @@ case "$cmd" in
         else
             gh pr create --head "$branch" --base main --title "$title" --body-file "$body_file"
         fi
+        ;;
+    pr-merge)
+        branch="${1:?usage: github.sh pr-merge <branch>}"
+        gh pr merge "$branch" --squash --delete-branch
         ;;
     issue-open)
         label="${1:?usage: github.sh issue-open <label> <title> <body-file>}"
@@ -70,6 +78,6 @@ case "$cmd" in
         fi
         ;;
     *)
-        die "unknown subcommand: $cmd (expected pr-open, issue-open or issue-close)"
+        die "unknown subcommand: $cmd (expected pr-open, pr-merge, issue-open or issue-close)"
         ;;
 esac
