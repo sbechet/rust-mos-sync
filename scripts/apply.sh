@@ -24,7 +24,7 @@ git -C "$dir" clean -qfdx -e /build
 if [ "$component" = llvm ]; then
     series_dir=$(llvm_series_dir "${base#base-}")
 else
-    series_dir="$ROOT/patches/$component"
+    series_dir=$(rust_series_dir "${base#base-}")
 fi
 mapfile -t series < <(find "$series_dir" -maxdepth 1 -name '*.patch' 2>/dev/null | sort)
 if [ ${#series[@]} -eq 0 ]; then

@@ -16,7 +16,7 @@ esac
 if [ "$component" = llvm ]; then
     out=$(llvm_series_dir "${base#base-}" --allow-missing)
 else
-    out="$ROOT/patches/$component"
+    out=$(rust_series_dir "${base#base-}" --allow-missing)
 fi
 
 mkdir -p "$out"

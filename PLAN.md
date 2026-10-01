@@ -50,7 +50,7 @@ rust-mos-sync/
 ├── versions.toml            # single source of truth for current state
 ├── patches/
 │   ├── llvm/<NN.N>/         # one git format-patch series per Rust LLVM branch, on top of rust-lang/llvm-project
-│   └── rust/                # git format-patch series on top of rust-lang/rust tag
+│   └── rust/<X.Y>/          # one git format-patch series per Rust minor version
 ├── targets/                 # target definitions (source for rustc spec patch, or JSON fallback)
 ├── config/
 │   └── bootstrap.toml.in    # template for rust's bootstrap config (config.toml on old versions)
@@ -306,7 +306,7 @@ validation once a genuine new stable Rust tag lands upstream.
 Headless invocation, guardrails, prompts in `ci/claude/`, reports in PRs. Test it by replaying a past conflict.
 
 **Phase 6 — LLVM bumps. Implemented 2026-10-01, pending a real run.**
-`llvm-bump.yml`, driven from beta. One MOS patch series per LLVM version (`patches/llvm/<NN.N>/`, with the llvm-mos merge it was extracted from in `BASE_MERGE`) so stable can stay on the old LLVM while beta's bump is prepared: each channel uses the series of its own `llvm_branch`, `detect.sh` reports `llvm-bump` when a branch has none, `llvm_mos.patched_branch` is gone. `scripts/llvm-bump.sh <channel>` extracts the patch (clang/lld/compiler-rt left out: we build LLVM only), applies it, resolves upstream-drift conflicts in other targets/non-MOS tests to the Rust side, and exits 2 on real ones (resolve in `work/llvm-project`, then `--continue`). The 23.1 series (beta) was produced this way, with 7 hand-resolved conflicts and a port of the MOS `llvm-readobj`/`MOSFlags` code to 23's `EnumStrings` API. *Done when:* a simulated bump (previous → current Rust LLVM branch) completes end to end.
+`llvm-bump.yml`, driven from beta. One MOS patch series per LLVM version (`patches/llvm/<NN.N>/`, with the llvm-mos merge it was extracted from in `BASE_MERGE`) so stable can stay on the old LLVM while beta's bump is prepared: each channel uses the series of its own `llvm_branch`, `detect.sh` reports `llvm-bump` when a branch has none, `llvm_mos.patched_branch` is gone. `scripts/llvm-bump.sh <channel>` extracts the patch (clang/lld/compiler-rt left out: we build LLVM only), applies it, resolves upstream-drift conflicts in other targets/non-MOS tests to the Rust side, and exits 2 on real ones (resolve in `work/llvm-project`, then `--continue`). `patches/rust/` got the same layout (`<X.Y>/`, the version read from the checkout's `src/version`): beta's Rust 1.100 needed its own series (different `STAGE0_MISSING_TARGETS`, a `va_arg.rs` arm, and bootstrap pins `cc` 1.2.62 where stable pins 1.2.28, so the vendored `cc` of patch 0003 differs per version); `patches/rust/1.98/` is stable's. A new minor with no series yet fails `apply.sh` with exit 2 (copy the nearest series and resolve). The 23.1 series (beta) was produced this way, with 7 hand-resolved conflicts and a port of the MOS `llvm-readobj`/`MOSFlags` code to 23's `EnumStrings` API. *Done when:* a simulated bump (previous → current Rust LLVM branch) completes end to end.
 
 **Phase 7 — Distribution polish.**
 Beta→stable promotion, rustup manifests, additional hosts.
