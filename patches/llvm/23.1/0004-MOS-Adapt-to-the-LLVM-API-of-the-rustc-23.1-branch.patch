@@ -3,13 +3,28 @@ From: rust-mos-sync <rust-mos-sync@localhost>
 Date: Thu, 1 Oct 2026 12:51:07 +0000
 Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
 
-TargetMachine::resetTargetOptions was removed upstream; per-function code
-generation flags no longer live in TargetOptions, so there is nothing to
-reset before creating a subtarget.
+- TargetMachine::resetTargetOptions was removed upstream; per-function code
+  generation flags no longer live in TargetOptions, so there is nothing to
+  reset before creating a subtarget.
+- MCTargetAsmParser's constructor no longer takes MCTargetOptions.
 ---
- llvm/lib/Target/MOS/MOSTargetMachine.cpp | 4 ----
- 1 file changed, 4 deletions(-)
+ llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp | 2 +-
+ llvm/lib/Target/MOS/MOSTargetMachine.cpp       | 4 ----
+ 2 files changed, 1 insertion(+), 5 deletions(-)
 
+diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
+index 198865959a009fbebb0f57fed6d0104b679b7dda..02bf1440b41caf2af91ac6da31ea93cdc741a226 100644
+--- a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
++++ b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
+@@ -254,7 +254,7 @@ public:
+ 
+   MOSAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+                const MCInstrInfo &MII, const MCTargetOptions &Options)
+-      : MCTargetAsmParser(Options, STI, MII), Parser(Parser) {
++      : MCTargetAsmParser(STI, MII), Parser(Parser) {
+     MCAsmParserExtension::Initialize(Parser);
+     MRI = getContext().getRegisterInfo();
+ 
 diff --git a/llvm/lib/Target/MOS/MOSTargetMachine.cpp b/llvm/lib/Target/MOS/MOSTargetMachine.cpp
 index 3bb679dac9c3bb5b639990d52bb89e849c02a04d..aaa39b872147c2fedbb0a46e7d195d0057db6832 100644
 --- a/llvm/lib/Target/MOS/MOSTargetMachine.cpp
