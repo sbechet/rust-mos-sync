@@ -201,6 +201,7 @@ A richer test suite is what makes auto-merge safe; grow `tests/programs/` over t
 ## 10. Merge and release policy
 
 - **Rust-only syncs and MOS backend syncs**: auto-merge if all test tiers pass. Released first on the `beta` channel; promoted to `stable` automatically after 7 days without a regression issue.
+  *Implemented so far (2026-10-01):* `sync-rust.yml` merges its own PR and dispatches `release.yml` once its test tiers pass (no 7-day beta soak yet - each channel is synced and released independently; the beta->stable promotion delay is still to build). Needs the repo setting "Allow GitHub Actions to create and approve pull requests".
 - **LLVM bumps**: always require a human approval on the PR before merge.
 - **Failures**: any failed workflow opens (or updates) a single issue per channel with logs and the Claude report; it is closed automatically by the next successful run.
 
