@@ -41,6 +41,7 @@ tmpl, out, host, channel, llvm_config, sdk, jobs, *targets = sys.argv[1:]
 text = open(tmpl).read()
 for k, v in {"@HOST@": host, "@CHANNEL@": channel, "@LLVM_CONFIG@": llvm_config,
              "@SDK@": sdk, "@JOBS@": jobs,
+             "@OMIT_GIT_HASH@": "true" if channel == "beta" else "false",
              "@MOS_TARGETS@": ", ".join(f'"{t}"' for t in targets)}.items():
     text = text.replace(k, v)
 for t in targets:
