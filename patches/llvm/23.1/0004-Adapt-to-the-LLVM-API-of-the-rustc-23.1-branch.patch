@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: rust-mos-sync <rust-mos-sync@localhost>
 Date: Thu, 1 Oct 2026 12:51:07 +0000
-Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
+Subject: [PATCH] Adapt to the LLVM API of the rustc/23.1 branch
 
 - TargetMachine::resetTargetOptions was removed upstream; per-function code
   generation flags no longer live in TargetOptions, so there is nothing to
