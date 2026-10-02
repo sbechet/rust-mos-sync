@@ -259,19 +259,36 @@ jobs:
 
       - name: Publish the release
         run: |
+          . scripts/lib.sh
           asset=$(ls work/rust-mos-${{ matrix.channel }}-*.tar.xz)
-          title="rust-mos ${{ matrix.channel }} (${{ steps.tag.outputs.tag }})"
+          tag="${{ steps.tag.outputs.tag }}"
+          rust=$(ver_get "rust.${{ matrix.channel }}.tag")
+          branch=$(ver_get "rust.${{ matrix.channel }}.llvm_branch")
+          if [ "${{ matrix.channel }}" = stable ]; then
+            title="rust-mos stable - Rust $rust ($tag)"
+          else
+            title="rust-mos beta - Rust $rust (rolling preview, replaced on every beta sync)"
+          fi
+          {
+            echo "MOS 6502 Rust toolchain, **${{ matrix.channel }}** channel: Rust \`$rust\`, LLVM $(llvm_version_of_branch "$branch") (\`$branch\`), llvm-mos SDK \`$(ver_get llvm_mos_sdk.release)\`."
+            echo
+            echo "Install: \`curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/install-${{ matrix.channel }}.sh | sh\`, or use the Docker image (see the README for its tags)."
+            echo
+            echo "### Test report"
+            echo '```'; cat work/test-report.txt; echo '```'
+          } > work/release-notes.md
           # Asset filenames are downloaded by exact name (install.sh.in / the
           # README both reference install-<channel>.sh), so no #label here -
           # a gh release upload label only changes the display name, not the
           # download URL.
-          if gh release view "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
-            gh release upload "${{ steps.tag.outputs.tag }}" \
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" \
               "$asset" "$asset.sha256" "work/install-${{ matrix.channel }}.sh" --clobber
+            gh release edit "$tag" --title "$title" --notes-file work/release-notes.md
           else
-            flags=(--title "$title" --notes-file work/test-report.txt)
+            flags=(--title "$title" --notes-file work/release-notes.md)
             if [ "${{ steps.tag.outputs.prerelease }}" = true ]; then flags+=(--prerelease); fi
-            gh release create "${{ steps.tag.outputs.tag }}" \
+            gh release create "$tag" \
               "$asset" "$asset.sha256" "work/install-${{ matrix.channel }}.sh" "${flags[@]}"
           fi
 
