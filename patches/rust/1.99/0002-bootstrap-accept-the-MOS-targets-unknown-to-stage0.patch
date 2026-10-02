@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 14:27:48 +0000
+Subject: [PATCH] bootstrap: accept the MOS targets unknown to stage0
+
+---
+ src/bootstrap/src/core/sanity.rs | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/bootstrap/src/core/sanity.rs b/src/bootstrap/src/core/sanity.rs
+index 0256aabe54edbfa85d4d2589baf2341aca39a149..d7e2e3d91b85a4202f3aaff24e38e357bc3c4622 100644
+--- a/src/bootstrap/src/core/sanity.rs
++++ b/src/bootstrap/src/core/sanity.rs
+@@ -31,6 +31,15 @@ pub struct Finder {
+ /// in-tree compiler, the stage 0 compiler might not yet know about it (assuming not operating with
+ /// local-rebuild). In such cases, we handle the targets missing from stage 0 in this list.
+ ///
++/// MOS targets are added by rust-mos-sync; no upstream stage0 knows them. A list of
++/// its own, not part of `STAGE0_MISSING_TARGETS`, so the patch applies on Rust
++/// versions whose list differs.
++const MOS_TARGETS: &[&str] = &[
++    "mos-unknown-none",
++    "mos-sim-none",
++    "mos-c64-none",
++];
++
+ /// Targets can be removed from this list during the usual release process bootstrap compiler bumps,
+ /// when the newly-bumped stage 0 compiler now knows about the formerly-missing targets.
+ const STAGE0_MISSING_TARGETS: &[&str] = &[
+@@ -270,6 +279,7 @@ pub fn check(build: &mut Build) {
+             // Check if it's a built-in target.
+             has_target |= stage0_supported_target_list.contains(&target_str);
+             has_target |= STAGE0_MISSING_TARGETS.contains(&target_str.as_str());
++            has_target |= MOS_TARGETS.contains(&target_str.as_str());
+ 
+             if !has_target {
+                 // This might also be a custom target, so check the target file that could have been specified by the user.
