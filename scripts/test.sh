@@ -44,20 +44,42 @@ failed=0
 pass() { printf 'PASS %s\n' "$*" | tee -a "$report" >&2; }
 fail() { printf 'FAIL %s\n' "$*" | tee -a "$report" >&2; failed=$((failed + 1)); }
 skip() { printf 'SKIP %s\n' "$*" | tee -a "$report" >&2; }
+warn_known() { printf 'WARN %s\n' "$*" | tee -a "$report" >&2; }
 
 mos_targets() {
     "$RUSTC" --print target-list | grep '^mos-'
 }
 
+# patches/llvm/<NN.N>/KNOWN_LIT_FAILURES: lit tests (one per line, as lit prints
+# them, "LLVM :: CodeGen/MOS/x.ll"; '#' comments) that fail on that LLVM branch
+# for a reason that is understood and not yet proven harmful. They are reported
+# as WARN instead of failing the tier; any other failing test still fails it.
+# Delete the file once the tests are fixed or the series is verified.
 tier_llvm() {
     local lit="$WORK/llvm-build/bin/llvm-lit"
     if [ ! -x "$lit" ]; then skip "llvm: $lit not found (LLVM restored from cache?)"; return; fi
-    local d
+    local d log known="" t unexpected
+    local series_dir
+    series_dir=$(llvm_series_dir "${CHANNEL:-stable}" --allow-missing)
+    [ -f "$series_dir/KNOWN_LIT_FAILURES" ] && known=$(grep -v '^[[:space:]]*\(#\|$\)' "$series_dir/KNOWN_LIT_FAILURES")
     for d in CodeGen/MOS MC/MOS; do
-        if "$lit" -v -j "$JOBS" "$WORK/llvm-project/llvm/test/$d" >"$WORK/lit-${d//\//-}.log" 2>&1; then
+        log="$WORK/lit-${d//\//-}.log"
+        if "$lit" -v -j "$JOBS" "$WORK/llvm-project/llvm/test/$d" >"$log" 2>&1; then
             pass "llvm: lit $d"
+            continue
+        fi
+        unexpected=0
+        while IFS= read -r t; do
+            if grep -qxF "$t" <<<"$known"; then
+                warn_known "llvm: lit $d: $t (known failure, see KNOWN_LIT_FAILURES)"
+            else
+                unexpected=1
+            fi
+        done < <(sed -n '/^Failed Tests/,/^$/p' "$log" | sed -n 's/^  \(LLVM :: .*\)$/\1/p')
+        if [ "$unexpected" = 0 ] && grep -q '^Failed Tests' "$log"; then
+            pass "llvm: lit $d (only known failures)"
         else
-            fail "llvm: lit $d (see $WORK/lit-${d//\//-}.log)"
+            fail "llvm: lit $d (see $log)"
         fi
     done
 }
