@@ -68,6 +68,7 @@ jobs:
             echo "tags<<TAGSEOF"; echo "$tags"; echo "TAGSEOF"
             echo "labels<<LABELSEOF"
             echo "org.opencontainers.image.version=$rust ($ch)"
+            echo "org.opencontainers.image.description=MOS 6502 Rust toolchain ($ch) - Rust $rust, LLVM $(llvm_version_of_branch "$llvm_branch"), llvm-mos SDK $(ver_get llvm_mos_sdk.release) - core/alloc, no std"
             echo "io.github.sbechet.rust-mos.channel=$ch"
             echo "io.github.sbechet.rust-mos.rust=$rust"
             echo "io.github.sbechet.rust-mos.llvm=$(llvm_version_of_branch "$llvm_branch") ($llvm_branch @ $(ver_get "rust.$ch.llvm_commit" | cut -c1-12))"
@@ -127,6 +128,7 @@ jobs:
         with:
           context: docker
           push: true
+          provenance: false
           tags: ${{ steps.tags.outputs.tags }}
           labels: ${{ steps.tags.outputs.labels }}
           build-args: |
