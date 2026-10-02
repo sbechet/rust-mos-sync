@@ -163,6 +163,10 @@ jobs:
           scripts/github.sh pr-open "$BRANCH" "llvm-bump: $CHANNEL -> $(. scripts/lib.sh; ver_get "rust.$CHANNEL.llvm_branch")" /tmp/pr-body.md
           scripts/github.sh issue-close "$FAIL_LABEL" "Fixed by $BRANCH."
 
+      - name: Diagnose failed lit tests (llc -print-after-all)
+        if: failure()
+        run: scripts/lit-diag.sh
+
       - name: Errors as annotations
         if: failure()
         run: .github/annotate-errors.sh work/llvm-cmake.log work/llvm-build.log work/rust-build.log work/test-programs.log work/smoke.log work/test-report.txt
