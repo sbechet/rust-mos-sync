@@ -54,7 +54,7 @@ tier_llvm() {
     if [ ! -x "$lit" ]; then skip "llvm: $lit not found (LLVM restored from cache?)"; return; fi
     local d
     for d in CodeGen/MOS MC/MOS; do
-        if "$lit" -q -j "$JOBS" "$WORK/llvm-project/llvm/test/$d" >"$WORK/lit-${d//\//-}.log" 2>&1; then
+        if "$lit" -v -j "$JOBS" "$WORK/llvm-project/llvm/test/$d" >"$WORK/lit-${d//\//-}.log" 2>&1; then
             pass "llvm: lit $d"
         else
             fail "llvm: lit $d (see $WORK/lit-${d//\//-}.log)"
