@@ -23,6 +23,10 @@ on:
         type: choice
         options: ["", stable, beta]
         default: ""
+      versions_ref:
+        description: "Re-publish an OLD release: git ref (commit) whose versions.toml to build, e.g. 83f7125. Needs `channel`. Moving tags and GitHub's latest are left alone."
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -41,6 +45,8 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       channels: ${{ steps.diff.outputs.channels }}
+      versions_ref: ${{ steps.diff.outputs.versions_ref }}
+      historic: ${{ steps.diff.outputs.historic }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,7 +59,13 @@ jobs:
 
           before="${{ github.event.before }}"
           manual="${{ inputs.channel }}"
+          vref="${{ inputs.versions_ref }}"
           changed=()
+          if [ -n "$vref" ] && [ -z "$manual" ]; then
+              echo "versions_ref needs a channel" >&2; exit 1
+          fi
+          echo "versions_ref=$vref" >> "$GITHUB_OUTPUT"
+          if [ -n "$vref" ]; then echo "historic=true" >> "$GITHUB_OUTPUT"; else echo "historic=false" >> "$GITHUB_OUTPUT"; fi
 
           if [ -n "$manual" ]; then
               changed=("$manual")
@@ -94,6 +106,12 @@ jobs:
       key: ${{ steps.key.outputs.key }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: versions.toml of the release being re-published
+        if: needs.detect.outputs.versions_ref != ''
+        run: |
+          git fetch -q --depth=1 origin "${{ needs.detect.outputs.versions_ref }}"
+          git checkout FETCH_HEAD -- versions.toml
 
       - name: Cache key
         id: key
@@ -195,6 +213,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: versions.toml of the release being re-published
+        if: needs.detect.outputs.versions_ref != ''
+        run: |
+          git fetch -q --depth=1 origin "${{ needs.detect.outputs.versions_ref }}"
+          git checkout FETCH_HEAD -- versions.toml
+
       - name: Free disk space
         run: .github/free-disk.sh
 
@@ -230,19 +254,6 @@ jobs:
       - name: Package toolchain
         run: scripts/dist.sh "${{ matrix.channel }}"
 
-      - name: Render install.sh
-        run: |
-          . scripts/lib.sh
-          sed -e "s/@SDK_RELEASE@/$(ver_get llvm_mos_sdk.release)/" \
-              -e "s/@SDK_SHA256@/$(ver_get llvm_mos_sdk.sha256)/" \
-              config/install.sh.in > "work/install-${{ matrix.channel }}.sh"
-          chmod +x "work/install-${{ matrix.channel }}.sh"
-
-      - name: Checksum
-        run: |
-          asset=$(ls work/rust-mos-${{ matrix.channel }}-*.tar.xz)
-          sha256sum "$asset" > "$asset.sha256"
-
       - name: Compute the release tag
         id: tag
         run: |
@@ -256,6 +267,20 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Render install.sh
+        run: |
+          . scripts/lib.sh
+          sed -e "s/@SDK_RELEASE@/$(ver_get llvm_mos_sdk.release)/" \
+              -e "s/@SDK_SHA256@/$(ver_get llvm_mos_sdk.sha256)/" \
+              -e "s/@RELEASE_TAG@/${{ steps.tag.outputs.tag }}/" \
+              config/install.sh.in > "work/install-${{ matrix.channel }}.sh"
+          chmod +x "work/install-${{ matrix.channel }}.sh"
+
+      - name: Checksum
+        run: |
+          asset=$(ls work/rust-mos-${{ matrix.channel }}-*.tar.xz)
+          sha256sum "$asset" > "$asset.sha256"
 
       - name: Publish the release
         run: |
@@ -277,6 +302,9 @@ jobs:
             echo "### Test report"
             echo '```'; cat work/test-report.txt; echo '```'
           } > work/release-notes.md
+          # Re-publishing an old release must not become GitHub's "latest".
+          latest=()
+          if [ "${{ needs.detect.outputs.historic }}" = true ]; then latest=(--latest=false); fi
           # Asset filenames are downloaded by exact name (install.sh.in / the
           # README both reference install-<channel>.sh), so no #label here -
           # a gh release upload label only changes the display name, not the
@@ -284,9 +312,9 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" \
               "$asset" "$asset.sha256" "work/install-${{ matrix.channel }}.sh" --clobber
-            gh release edit "$tag" --title "$title" --notes-file work/release-notes.md
+            gh release edit "$tag" --title "$title" --notes-file work/release-notes.md "${latest[@]}"
           else
-            flags=(--title "$title" --notes-file work/release-notes.md)
+            flags=(--title "$title" --notes-file work/release-notes.md "${latest[@]}")
             if [ "${{ steps.tag.outputs.prerelease }}" = true ]; then flags+=(--prerelease); fi
             gh release create "$tag" \
               "$asset" "$asset.sha256" "work/install-${{ matrix.channel }}.sh" "${flags[@]}"
@@ -333,3 +361,5 @@ jobs:
       channel: ${{ matrix.channel }}
       artifact_name: toolchain-${{ matrix.channel }}-x86_64-unknown-linux-gnu
       release: true
+      versions_ref: ${{ needs.detect.outputs.versions_ref }}
+      historic: ${{ needs.detect.outputs.historic == 'true' }}
