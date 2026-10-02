@@ -26,10 +26,21 @@ each target, the C runtime, the `mos-sim` simulator) on `PATH`; nothing gets
 compiled when the image itself is built, and nothing needs to be installed to
 use it.
 
-```
-ghcr.io/sbechet/rust-mos:stable    # tracks rust.stable in versions.toml
-ghcr.io/sbechet/rust-mos:beta      # tracks rust.beta
-```
+Tags (the Rust version and the channel are in every versioned tag):
+
+| Tag | Example | Meaning |
+|---|---|---|
+| `stable` | | latest stable toolchain (moving) |
+| `beta` | | latest beta preview (moving) |
+| `<X.Y>` | `1.99` | latest revision of that stable Rust version (moving) |
+| `<X.Y.Z>-mos.<N>` | `1.99.0-mos.1` | one stable release, immutable |
+| `<X.Y.Z>-beta-mos.<commit>` | `1.100.0-beta-mos.e3feeb5` | one beta build, immutable |
+
+Use a versioned tag in CI and for anything that must be reproducible; `stable`
+and `beta` move. `sha-<commit>` tags (this repository's commit) exist for
+debugging only. Each image also carries labels with the channel, the Rust
+version, the LLVM version and commit, and the llvm-mos SDK release:
+`docker inspect --format '{{json .Config.Labels}}' ghcr.io/sbechet/rust-mos:stable`.
 
 ### Example: building a crate `foo` for the Commodore 64
 
