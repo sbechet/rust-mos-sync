@@ -280,7 +280,9 @@ jobs:
       - name: Checksum
         run: |
           asset=$(ls work/rust-mos-${{ matrix.channel }}-*.tar.xz)
-          sha256sum "$asset" > "$asset.sha256"
+          # Hash the bare file name (no work/ prefix): that is what a user
+          # downloads and checks.
+          (cd work && sha256sum "$(basename "$asset")" > "$(basename "$asset").sha256")
 
       - name: Publish the release
         run: |

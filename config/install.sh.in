@@ -54,7 +54,14 @@ echo "Installing rust-mos $channel ($release_tag) for $host..."
 base="https://github.com/$repo/releases/download/$release_tag"
 curl -sSfL --retry 3 -o "$tmp/toolchain.tar.xz" "$base/rust-mos-$channel-$host.tar.xz"
 curl -sSfL --retry 3 -o "$tmp/toolchain.tar.xz.sha256" "$base/rust-mos-$channel-$host.tar.xz.sha256"
-(cd "$tmp" && sha256sum -c "toolchain.tar.xz.sha256")
+# Compare the hash alone: the .sha256 file names the asset as it was built, and
+# the download is stored here under another name.
+expected=$(cut -d' ' -f1 "$tmp/toolchain.tar.xz.sha256")
+actual=$(sha256sum "$tmp/toolchain.tar.xz" | cut -d' ' -f1)
+if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+    echo "error: checksum mismatch for the toolchain download (expected '$expected', got '$actual')" >&2
+    exit 1
+fi
 rm -rf "$toolchain_dir"
 mkdir -p "$toolchain_dir"
 tar -xJf "$tmp/toolchain.tar.xz" -C "$toolchain_dir"
