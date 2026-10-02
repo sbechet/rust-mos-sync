@@ -37,13 +37,12 @@ if [ ! -d "$rust_probe/.git" ]; then
     git -C "$rust_probe" remote add origin "$RUST_URL"
 fi
 
-# The branch patches/llvm/ actually applies to - NOT rust.<channel>.llvm_branch,
-# which only says what that channel's own PREVIOUS sync recorded and can be
-# wrong from the start (e.g. beta routinely sits on a newer LLVM branch than
-# what patches/llvm/ was ever extracted for; comparing to its own prior value
-# would call that "no bump needed" forever and retry - and fail - a build
-# every day. See docs/backlog.md).
-patched_branch=$(ver_get llvm_mos.patched_branch)
+# An LLVM branch needs a bump iff there is no patches/llvm/<NN.N>/ series for
+# it yet. Not "did the channel's LLVM branch change since its last sync": beta
+# routinely sits on a newer branch than any series was extracted for, which
+# would read as "no bump needed" forever and retry - and fail - a build every
+# day (docs/backlog.md -1).
+has_series() { [ -n "$(ls "$ROOT/patches/llvm/$(llvm_version_of_branch "$1")"/*.patch 2>/dev/null)" ]; }
 
 # --- rust.stable: newest vX.Y.Z tag -------------------------------------
 latest_stable=$(git ls-remote --tags "$RUST_URL" \
@@ -53,7 +52,7 @@ current_stable=$(ver_get rust.stable.tag)
 if [ -n "$latest_stable" ] && [ "$latest_stable" != "$current_stable" ]; then
     git -C "$rust_probe" fetch -q --depth=1 origin "refs/tags/$latest_stable:refs/tags/$latest_stable"
     if read -r llvm_branch llvm_commit < <(llvm_branch_of "$rust_probe" "$latest_stable"); then
-        if [ "$llvm_branch" = "$patched_branch" ]; then
+        if has_series "$llvm_branch"; then
             echo "ACTION sync-rust stable $latest_stable $llvm_branch $llvm_commit"
         else
             echo "ACTION llvm-bump stable $latest_stable $llvm_branch $llvm_commit"
@@ -69,7 +68,7 @@ current_beta=$(ver_get rust.beta.commit)
 if [ -n "$latest_beta" ] && [ "$latest_beta" != "$current_beta" ]; then
     git -C "$rust_probe" fetch -q --depth=1 origin "$latest_beta"
     if read -r llvm_branch llvm_commit < <(llvm_branch_of "$rust_probe" "$latest_beta"); then
-        if [ "$llvm_branch" = "$patched_branch" ]; then
+        if has_series "$llvm_branch"; then
             echo "ACTION sync-rust beta $latest_beta $llvm_branch $llvm_commit"
         else
             echo "ACTION llvm-bump beta $latest_beta $llvm_branch $llvm_commit"

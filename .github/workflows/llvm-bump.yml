@@ -1,0 +1,189 @@
+# PLAN.md §7.4: prepares the MOS patch series (patches/llvm/<NN.N>/) for a Rust
+# LLVM branch that has none yet, then proves it: LLVM build, tier 1 (llvm-lit),
+# rustc build and tiers 2-5, and opens a PR labelled `llvm-bump`. That PR is
+# NEVER merged automatically (PLAN.md §10): a human reviews the files outside
+# the MOS backend listed in its description. Manual for now; watch.yml
+# dispatches it once WORKFLOW_DISPATCH_TOKEN exists.
+#
+# Conflicts that scripts/llvm-bump.sh cannot resolve (exit 2) open a
+# `llvm-bump-needed-<channel>` issue listing them: Claude Code resolution is
+# Phase 5, not built yet.
+name: llvm-bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Rust channel whose LLVM branch needs a patch series"
+        type: choice
+        options: [beta, stable]
+        default: beta
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: llvm-bump-${{ inputs.channel }}
+  cancel-in-progress: false
+
+env:
+  CHANNEL: ${{ inputs.channel }}
+  STAGE: "1"
+  GH_TOKEN: ${{ github.token }}
+  FAIL_LABEL: llvm-bump-needed-${{ inputs.channel }}
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: .github/free-disk.sh
+
+      - name: Install build tools
+        run: sudo apt-get update -q && sudo apt-get install -yq ninja-build lld ccache pkg-config libssl-dev
+
+      - name: git identity for the commit this workflow makes
+        run: |
+          git config user.name "rust-mos-sync[bot]"
+          git config user.email "rust-mos-sync-bot@users.noreply.github.com"
+
+      - name: Prepare the patch series
+        id: series
+        run: |
+          rc=0
+          scripts/llvm-bump.sh "$CHANNEL" || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          [ "$rc" = 0 ] || [ "$rc" = 2 ] || exit "$rc"
+          if [ "$rc" = 0 ] && git diff --quiet && [ -z "$(git ls-files --others --exclude-standard patches)" ]; then
+            echo "nothing to bump for $CHANNEL"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          . scripts/lib.sh
+          echo "BRANCH=bump/llvm-$(llvm_version_of_branch "$(ver_get "rust.$CHANNEL.llvm_branch")")-$CHANNEL" >> "$GITHUB_ENV"
+
+      - name: Report unresolved conflicts
+        if: steps.series.outputs.rc == '2'
+        run: |
+          {
+            echo "scripts/llvm-bump.sh could not finish the LLVM bump for $CHANNEL (exit 2)."
+            echo "Claude Code resolution (PLAN.md §8, Phase 5) is not enabled yet: the"
+            echo "conflicts below need a manual resolution. Reproduce locally with"
+            echo "\`scripts/llvm-bump.sh $CHANNEL\`; the resolved patches go in patches/llvm/<NN.N>/."
+            echo
+            cat work/llvm-bump-report.md
+          } > /tmp/issue.md
+          scripts/github.sh issue-open "$FAIL_LABEL" "LLVM bump for $CHANNEL needs manual conflict resolution" /tmp/issue.md
+
+      - name: Commit the series
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: |
+          git checkout -q -b "$BRANCH"
+          git add patches versions.toml
+          git commit -q -m "llvm: MOS patch series for $(ver=$(. scripts/lib.sh; ver_get "rust.$CHANNEL.llvm_branch"); echo "$ver")"
+
+      - name: Fetch and patch LLVM from the committed series
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: |
+          scripts/fetch.sh llvm "$CHANNEL"
+          scripts/apply.sh llvm "base-$CHANNEL"
+
+      - name: Restore ccache
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ccache-llvm-
+
+      - name: Build LLVM
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        env:
+          LLVM_NO_DOWNLOAD: "1"
+          LLVM_KEEP_GOING: "1"
+          LINK_JOBS: "2"
+          CCACHE_MAXSIZE: 3G
+        run: scripts/build-llvm.sh "$CHANNEL"
+
+      - name: Save ccache
+        if: always() && steps.series.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Test tier 1 (llvm-lit MOS)
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: scripts/test.sh llvm
+
+      - name: Publish the LLVM to the llvm-cache release
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: |
+          scripts/build-llvm.sh --package "$CHANNEL"
+          key=$(scripts/build-llvm.sh --key "$CHANNEL")
+          gh release view llvm-cache >/dev/null 2>&1 || gh release create llvm-cache \
+            --prerelease --title "LLVM build cache" \
+            --notes "Patched LLVM installs keyed by scripts/build-llvm.sh --key. Not for end users."
+          gh release upload llvm-cache "work/llvm-$key-x86_64-unknown-linux-gnu.tar.xz" --clobber
+
+      - name: Fetch and patch Rust
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: |
+          scripts/fetch.sh rust "$CHANNEL"
+          scripts/apply.sh rust "base-$CHANNEL"
+
+      - name: Build rustc and the MOS libraries
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: scripts/build-rust.sh "$CHANNEL"
+
+      - name: Test tiers 2-5
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: scripts/test.sh std run size smoke
+
+      - name: Push branch and open the PR (never auto-merged)
+        if: steps.series.outputs.rc == '0' && steps.series.outputs.changed == 'true'
+        run: |
+          git push -q -u origin "$BRANCH"
+          {
+            cat work/llvm-bump-report.md
+            echo
+            echo "### Test report"
+            echo '```'; cat work/test-report.txt; echo '```'
+            echo
+            echo "**Needs human review** (PLAN.md §10): the files listed above outside the MOS backend."
+          } > /tmp/pr-body.md
+          scripts/github.sh pr-open "$BRANCH" "llvm-bump: $CHANNEL -> $(. scripts/lib.sh; ver_get "rust.$CHANNEL.llvm_branch")" /tmp/pr-body.md
+          scripts/github.sh issue-close "$FAIL_LABEL" "Fixed by $BRANCH."
+
+      - name: Diagnose failed lit tests (llc -print-after-all)
+        if: failure()
+        run: scripts/lit-diag.sh
+
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/llvm-cmake.log work/llvm-build.log work/rust-build.log work/test-programs.log work/smoke.log work/test-report.txt
+
+      - name: Report an unexpected failure
+        if: failure() && steps.series.outputs.rc != '2'
+        run: |
+          echo "See the [failed run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for logs." > /tmp/issue.md
+          scripts/github.sh issue-open "$FAIL_LABEL" "llvm-bump failed on $CHANNEL" /tmp/issue.md
+
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llvm-bump-${{ env.CHANNEL }}-logs
+          path: |
+            work/*.log
+            work/llvm-bump-report.md
+            work/test-report.txt
+          if-no-files-found: ignore

@@ -38,7 +38,8 @@ LINK_JOBS="${LINK_JOBS:-1}"
 
 # Everything that influences the produced binaries goes into the key.
 config="targets=$targets experimental=$experimental projects=$projects host=$host"
-patches_hash=$(cat "$ROOT"/patches/llvm/*.patch 2>/dev/null | sha256sum | cut -c1-16)
+series_dir=$(llvm_series_dir "$channel")
+patches_hash=$(cat "$series_dir"/*.patch 2>/dev/null | sha256sum | cut -c1-16)
 key="$(printf '%s\n%s\n%s\n' "$commit" "$patches_hash" "$config" | sha256sum | cut -c1-16)"
 prefix="$CACHE/llvm/$key"
 asset="llvm-$key-$host.tar.xz"
@@ -81,8 +82,8 @@ need git cmake ninja
 
 # The work tree must hold exactly base + series; otherwise the key lies.
 head_patches=$(git -C "$src" rev-list --count "$commit..mos" 2>/dev/null || echo x)
-want=$(find "$ROOT/patches/llvm" -maxdepth 1 -name '*.patch' | wc -l)
-[ "$head_patches" = "$want" ] || die "llvm work tree is not base + patches/llvm ($head_patches vs $want commits); run apply.sh llvm"
+want=$(find "$series_dir" -maxdepth 1 -name '*.patch' | wc -l)
+[ "$head_patches" = "$want" ] || die "llvm work tree is not base + ${series_dir#$ROOT/} ($head_patches vs $want commits); run apply.sh llvm"
 git -C "$src" diff --quiet HEAD || die "llvm work tree has uncommitted changes"
 
 cc=cc; cxx=c++; linker_flags=()

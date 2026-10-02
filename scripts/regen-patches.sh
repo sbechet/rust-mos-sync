@@ -13,7 +13,11 @@ case "$component" in
     rust) dir="$WORK/rust" ;;
     *) die "unknown component: $component" ;;
 esac
-out="$ROOT/patches/$component"
+if [ "$component" = llvm ]; then
+    out=$(llvm_series_dir "${base#base-}" --allow-missing)
+else
+    out=$(rust_series_dir "${base#base-}" --allow-missing)
+fi
 
 mkdir -p "$out"
 find "$out" -maxdepth 1 -name '*.patch' -delete

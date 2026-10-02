@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 17:39:34 +0000
+Subject: [PATCH] codegen_llvm: MOS has no reliable f16/f128
+
+llvm-mos cannot legalize `half` constant materialization ("unable to
+legalize instruction: G_FCONSTANT half"), hit while building
+compiler_builtins for mos-unknown-none (its f16 add/sub/etc. routines
+are only compiled when target_has_reliable_f16 is set). f128 excluded
+proactively for the same reason: an immature backend with no native
+float support at all.
+
+Unlike the LLVM-version-gated entries this sits next to, this is not a
+tracked upstream LLVM bug expected to disappear on the next bump.
+---
+ compiler/rustc_codegen_llvm/src/llvm_util.rs | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/compiler/rustc_codegen_llvm/src/llvm_util.rs b/compiler/rustc_codegen_llvm/src/llvm_util.rs
+index 4db534b9783306b36c752669b3bb5fedb6ef0003..31cdd32f4b3e6d6a6375436906a4ee6e590d535d 100644
+--- a/compiler/rustc_codegen_llvm/src/llvm_util.rs
++++ b/compiler/rustc_codegen_llvm/src/llvm_util.rs
+@@ -396,6 +396,12 @@ fn update_target_reliable_float_cfg(target: &Target, cfg: &mut TargetConfig) {
+     let (major, _, _) = version;
+ 
+     cfg.has_reliable_f16 = match (target_arch, target_os) {
++        // rust-mos-sync: llvm-mos cannot legalize `half` constant materialization
++        // ("unable to legalize instruction: G_FCONSTANT half"). Unlike the
++        // LLVM-version-gated bugs below, this is specific to the young MOS
++        // backend, not a tracked upstream LLVM issue expected to get fixed by
++        // an LLVM bump.
++        (Arch::Mos, _) => false,
+         // Unsupported <https://github.com/llvm/llvm-project/issues/94434> (fixed in llvm22)
+         (Arch::Arm64EC, _) if major < 22 => false,
+         // MinGW ABI bugs <https://gcc.gnu.org/bugzilla/show_bug.cgi?id=115054> resolved in GCC 16
+@@ -433,6 +439,9 @@ fn update_target_reliable_float_cfg(target: &Target, cfg: &mut TargetConfig) {
+     };
+ 
+     cfg.has_reliable_f128 = match (target_arch, target_os) {
++        // rust-mos-sync: not verified to work, and f16 already isn't (see above)
++        // on the same young backend; excluded proactively.
++        (Arch::Mos, _) => false,
+         // Unsupported https://github.com/llvm/llvm-project/issues/121122
+         (Arch::AmdGpu, _) => false,
+         (Arch::Arm64EC, _) if major < 23 => false, // (fixed in llvm23)

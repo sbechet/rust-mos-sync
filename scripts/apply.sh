@@ -2,7 +2,8 @@
 # apply.sh <llvm|rust> <base-ref>
 #
 # Creates a fresh branch `mos` from <base-ref> in the work tree and applies the
-# patches/<component>/*.patch series with `git am -3`. On conflict the tree is
+# patches/<component>/*.patch series with `git am -3` (for llvm, the series of
+# the LLVM branch of channel <base-ref> = base-<channel>: patches/llvm/<NN.N>/). On conflict the tree is
 # left in the conflicted state and the script exits 2 (PLAN.md §6).
 . "$(dirname "$0")/lib.sh"
 need git
@@ -20,7 +21,12 @@ git -C "$dir" am --abort >/dev/null 2>&1 || true
 git -C "$dir" checkout -q --force -B mos "$base"
 git -C "$dir" clean -qfdx -e /build
 
-mapfile -t series < <(find "$ROOT/patches/$component" -maxdepth 1 -name '*.patch' | sort)
+if [ "$component" = llvm ]; then
+    series_dir=$(llvm_series_dir "${base#base-}")
+else
+    series_dir=$(rust_series_dir "${base#base-}")
+fi
+mapfile -t series < <(find "$series_dir" -maxdepth 1 -name '*.patch' 2>/dev/null | sort)
 if [ ${#series[@]} -eq 0 ]; then
     log "no patches for $component"
     exit 0

@@ -1,0 +1,3 @@
+# 2 CHECK-order diffs on 23.1, see PLAN.md Phase 6
+LLVM :: CodeGen/MOS/legalizer.mir
+LLVM :: CodeGen/MOS/shift-rotate.ll

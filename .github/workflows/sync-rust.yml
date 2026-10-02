@@ -149,8 +149,8 @@ jobs:
       - name: Regenerate patches (should be a no-op)
         if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
         run: |
-          scripts/regen-patches.sh llvm
-          scripts/regen-patches.sh rust
+          scripts/regen-patches.sh llvm "base-$CHANNEL"
+          scripts/regen-patches.sh rust "base-$CHANNEL"
           git add patches
           git diff --cached --quiet patches || git commit -q -m "patches: regenerate after the $CHANNEL sync"
 

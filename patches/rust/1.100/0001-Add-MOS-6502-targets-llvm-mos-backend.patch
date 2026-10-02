@@ -1,0 +1,406 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 14:25:21 +0000
+Subject: [PATCH] Add MOS 6502 targets (llvm-mos backend)
+
+- rustc_target: Arch::Mos, MOS calling convention matching llvm-mos Clang,
+  built-in targets mos-unknown-none, mos-sim-none, mos-c64-none sharing
+  spec/base/mos.rs.
+- rustc_llvm: initialise the MOS LLVM target.
+- core: c_int is 16 bits on MOS.
+---
+ compiler/rustc_codegen_llvm/src/va_arg.rs     |  7 ++
+ compiler/rustc_llvm/build.rs                  |  1 +
+ compiler/rustc_llvm/src/lib.rs                |  8 +++
+ compiler/rustc_span/src/symbol.rs             |  1 +
+ compiler/rustc_target/src/asm/mod.rs          |  2 +-
+ compiler/rustc_target/src/callconv/mod.rs     |  2 +
+ compiler/rustc_target/src/callconv/mos.rs     | 49 ++++++++++++++
+ compiler/rustc_target/src/spec/base/mod.rs    |  1 +
+ compiler/rustc_target/src/spec/base/mos.rs    | 67 +++++++++++++++++++
+ compiler/rustc_target/src/spec/mod.rs         | 11 ++-
+ .../src/spec/targets/mos_c64_none.rs          |  5 ++
+ .../src/spec/targets/mos_sim_none.rs          |  5 ++
+ .../src/spec/targets/mos_unknown_none.rs      |  5 ++
+ compiler/rustc_target/src/target_features.rs  |  4 +-
+ library/core/src/ffi/primitives.rs            |  2 +-
+ library/core/src/ffi/va_list.rs               |  2 +-
+ 16 files changed, 165 insertions(+), 7 deletions(-)
+ create mode 100644 compiler/rustc_target/src/callconv/mos.rs
+ create mode 100644 compiler/rustc_target/src/spec/base/mos.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_c64_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_sim_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_unknown_none.rs
+
+diff --git a/compiler/rustc_codegen_llvm/src/va_arg.rs b/compiler/rustc_codegen_llvm/src/va_arg.rs
+index 8408e2eefb13e7139aaebcc3c33fd526093e7f70..905d418141c134b4a69bd90cbce93b4b90ec947c 100644
+--- a/compiler/rustc_codegen_llvm/src/va_arg.rs
++++ b/compiler/rustc_codegen_llvm/src/va_arg.rs
+@@ -1280,6 +1280,13 @@ pub(super) fn emit_va_arg<'ll, 'tcx>(
+         Arch::Bpf => bug!("bpf does not support c-variadic functions"),
+         Arch::SpirV => bug!("spirv does not support c-variadic functions"),
+ 
++        Arch::Mos => {
++            std::assert_matches!(stability, CVariadicStatus::Unstable { .. });
++
++            // Clang uses the LLVM implementation for this architecture.
++            bx.va_arg(addr.immediate(), layout.llvm_type(bx.cx))
++        }
++
+         Arch::Avr | Arch::M68k | Arch::Msp430 => {
+             std::assert_matches!(stability, CVariadicStatus::Unstable { .. });
+ 
+diff --git a/compiler/rustc_llvm/build.rs b/compiler/rustc_llvm/build.rs
+index 450b98f20cde99be40b7d28523b8a650bd5c0be3..8eadeed6c01f41af207db5a0ffb147d121ce97d4 100644
+--- a/compiler/rustc_llvm/build.rs
++++ b/compiler/rustc_llvm/build.rs
+@@ -22,6 +22,7 @@
+     "systemz",
+     "webassembly",
+     "msp430",
++    "mos",
+     "sparc",
+     "nvptx",
+     "hexagon",
+diff --git a/compiler/rustc_llvm/src/lib.rs b/compiler/rustc_llvm/src/lib.rs
+index a565e1feeb5e5915c2a58a4e4241694396c03293..dde530cc4d88d786e5fbe5d6e86d97ccc7f7642a 100644
+--- a/compiler/rustc_llvm/src/lib.rs
++++ b/compiler/rustc_llvm/src/lib.rs
+@@ -183,6 +183,14 @@ fn init() { }
+         LLVMInitializeMSP430AsmPrinter,
+         LLVMInitializeMSP430AsmParser
+     );
++    init_target!(
++        llvm_component = "mos",
++        LLVMInitializeMOSTargetInfo,
++        LLVMInitializeMOSTarget,
++        LLVMInitializeMOSTargetMC,
++        LLVMInitializeMOSAsmPrinter,
++        LLVMInitializeMOSAsmParser
++    );
+     init_target!(
+         llvm_component = "riscv",
+         LLVMInitializeRISCVTargetInfo,
+diff --git a/compiler/rustc_span/src/symbol.rs b/compiler/rustc_span/src/symbol.rs
+index e62ad4287524860dab1a075b9356c589d0d64dd7..eb89959b419b4a98153c026ed9a2dcdf3e839ee0 100644
+--- a/compiler/rustc_span/src/symbol.rs
++++ b/compiler/rustc_span/src/symbol.rs
+@@ -1393,6 +1393,7 @@
+         more_maybe_bounds,
+         more_qualified_paths,
+         more_struct_aliases,
++        mos,
+         movbe_target_feature,
+         move_expr,
+         move_ref_pattern,
+diff --git a/compiler/rustc_target/src/asm/mod.rs b/compiler/rustc_target/src/asm/mod.rs
+index 6f9751e8074908f0eb329d24d57ab0fb166ca18b..1b0eb7fcd45dc8436ab8dc36c262acd799dc9917 100644
+--- a/compiler/rustc_target/src/asm/mod.rs
++++ b/compiler/rustc_target/src/asm/mod.rs
+@@ -281,7 +281,7 @@ pub fn from_arch(arch: &Arch) -> Option<Self> {
+             Arch::M68k => Some(Self::M68k),
+             Arch::CSky => Some(Self::CSKY),
+             Arch::Xtensa => Some(Self::Xtensa),
+-            Arch::Other(_) => None,
++            Arch::Mos | Arch::Other(_) => None,
+         }
+     }
+ }
+diff --git a/compiler/rustc_target/src/callconv/mod.rs b/compiler/rustc_target/src/callconv/mod.rs
+index edc23b6c50b45b85af98783abac80917cf6c3527..04852d80794c0680f6689e74589750dfd913d332 100644
+--- a/compiler/rustc_target/src/callconv/mod.rs
++++ b/compiler/rustc_target/src/callconv/mod.rs
+@@ -19,6 +19,7 @@
+ mod hexagon;
+ mod loongarch;
+ mod m68k;
++mod mos;
+ mod mips;
+ mod mips64;
+ mod msp430;
+@@ -778,6 +779,7 @@ pub fn adjust_for_foreign_abi<C>(&mut self, cx: &C, abi: ExternAbi)
+             Arch::Avr => avr::compute_abi_info(cx, self),
+             Arch::LoongArch32 | Arch::LoongArch64 => loongarch::compute_abi_info(cx, self),
+             Arch::M68k => m68k::compute_abi_info(cx, self),
++            Arch::Mos => mos::compute_abi_info(cx, self),
+             Arch::CSky => csky::compute_abi_info(cx, self),
+             Arch::Mips | Arch::Mips32r6 => mips::compute_abi_info(cx, self),
+             Arch::Mips64 | Arch::Mips64r6 => mips64::compute_abi_info(cx, self),
+diff --git a/compiler/rustc_target/src/callconv/mos.rs b/compiler/rustc_target/src/callconv/mos.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..76fce8b6dfe6e75ed52b154c89e354efe7b8c593
+--- /dev/null
++++ b/compiler/rustc_target/src/callconv/mos.rs
+@@ -0,0 +1,49 @@
++//! MOS 65xx calling convention, as implemented by llvm-mos Clang
++//! (`clang/lib/CodeGen/Targets/MOS.cpp`, `MOSABIInfo`):
++//!
++//! - aggregates larger than 32 bits are passed and returned indirectly;
++//! - smaller aggregates are passed directly; the backend splits them byte by
++//!   byte, so they are coerced here to a sequence of `i8`;
++//! - scalars follow Clang's `DefaultABIInfo` (promotion to `int`, 16 bits).
++
++use rustc_abi::TyAbiInterface;
++
++use crate::callconv::{ArgAbi, FnAbi, Reg, Uniform};
++
++fn classify<'a, Ty, C>(cx: &C, arg: &mut ArgAbi<'a, Ty>, is_ret: bool)
++where
++    Ty: TyAbiInterface<'a, C> + Copy,
++{
++    if !arg.layout.is_sized() {
++        return;
++    }
++    if !is_ret && arg.layout.pass_indirectly_in_non_rustic_abis(cx) {
++        arg.make_indirect();
++        return;
++    }
++    if arg.layout.is_aggregate() {
++        let total = arg.layout.size;
++        if total.bits() > 32 {
++            arg.make_indirect();
++        } else if total.bytes() > 0 {
++            arg.cast_to(Uniform::new(Reg::i8(), total));
++        }
++    } else {
++        arg.extend_integer_width_to(16);
++    }
++}
++
++pub(crate) fn compute_abi_info<'a, Ty, C>(cx: &C, fty: &mut FnAbi<'a, Ty>)
++where
++    Ty: TyAbiInterface<'a, C> + Copy,
++{
++    if !fty.ret.is_ignore() {
++        classify(cx, &mut fty.ret, true);
++    }
++    for arg in fty.args.iter_mut() {
++        if arg.is_ignore() {
++            continue;
++        }
++        classify(cx, arg, false);
++    }
++}
+diff --git a/compiler/rustc_target/src/spec/base/mod.rs b/compiler/rustc_target/src/spec/base/mod.rs
+index 13f364f3d8258426f1c5325dc6b8f1521dee7eb5..3c19f9f029d0e68f0e380be0591dca7de3690c79 100644
+--- a/compiler/rustc_target/src/spec/base/mod.rs
++++ b/compiler/rustc_target/src/spec/base/mod.rs
+@@ -3,6 +3,7 @@
+ pub mod apple;
+ pub(crate) mod arm_none;
+ pub(crate) mod avr;
++pub(crate) mod mos;
+ pub(crate) mod bpf;
+ pub(crate) mod cygwin;
+ pub(crate) mod dragonfly;
+diff --git a/compiler/rustc_target/src/spec/base/mos.rs b/compiler/rustc_target/src/spec/base/mos.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4c6f367189bea7612ef50b60685bc142f9b86eff
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/base/mos.rs
+@@ -0,0 +1,67 @@
++//! Common definitions for the MOS 65xx targets (llvm-mos backend).
++//!
++//! Code generation happens in rustc with fat LTO (`requires_lto`), then the
++//! llvm-mos SDK Clang driver of the platform (`mos-<platform>-clang`) links
++//! the object with the platform C runtime and linker script.
++
++use crate::spec::{
++    Arch, Cc, LinkerFlavor, Lld, PanicStrategy, RelocModel, Target, TargetMetadata, TargetOptions,
++    cvs,
++};
++
++/// A MOS target linked with the SDK driver `linker`; `vendor` is the platform
++/// name exposed as `target_vendor` (e.g. "sim", "c64"), "unknown" for none.
++pub(crate) fn target(
++    vendor: &'static str,
++    linker: &'static str,
++    description: &'static str,
++) -> Target {
++    Target {
++        llvm_target: "mos-unknown-none".into(),
++        metadata: TargetMetadata {
++            description: Some(description.into()),
++            tier: Some(3),
++            host_tools: Some(false),
++            std: Some(false),
++        },
++        pointer_width: 16,
++        data_layout: "e-m:e-p:16:8-p1:8:8-i16:8-i32:8-i64:8-f32:8-f64:8-a:8-Fi8-n8".into(),
++        arch: Arch::Mos,
++        options: TargetOptions {
++            vendor: vendor.into(),
++            c_int_width: 16,
++            cpu: "mos6502".into(),
++            linker: Some(linker.into()),
++            linker_flavor: LinkerFlavor::Gnu(Cc::Yes, Lld::No),
++            // The SDK driver adds crt0, libc and the platform linker script.
++            no_default_libraries: false,
++            // The zero page and the static stack are allocated for the whole
++            // program at once, which needs a single LLVM module.
++            requires_lto: true,
++            default_codegen_units: Some(1),
++            singlethread: true,
++            max_atomic_width: Some(8),
++            atomic_cas: false,
++            panic_strategy: PanicStrategy::Abort,
++            relocation_model: RelocModel::Static,
++            disable_redzone: true,
++            trap_unreachable: false,
++            emit_debug_gdb_scripts: false,
++            eh_frame_header: false,
++            supports_stack_protector: false,
++            // Code generation flags the llvm-mos Clang driver always passes
++            // (`addMOSCodeGenArgs` in clang/lib/Driver/ToolChains/CommonArgs.cpp).
++            llvm_args: cvs![
++                "--force-precise-rotation-cost",
++                "--jump-inst-cost=6",
++                "--force-loop-cold-block",
++                "--phi-node-folding-threshold=0",
++                "--speculate-blocks=0",
++                "--align-large-globals=false",
++                "--disable-spill-hoist",
++                "--lsr-complexity-limit=10000000",
++            ],
++            ..Default::default()
++        },
++    }
++}
+diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+index 2d7cd049eb61c066f1f8427fff0e2fa9cb375448..4094187e2175488473bcf4e5353c3e74c78abc36 100644
+--- a/compiler/rustc_target/src/spec/mod.rs
++++ b/compiler/rustc_target/src/spec/mod.rs
+@@ -1539,6 +1539,10 @@ fn $module() {
+ 
+     ("msp430-none-elf", msp430_none_elf),
+ 
++    ("mos-unknown-none", mos_unknown_none),
++    ("mos-sim-none", mos_sim_none),
++    ("mos-c64-none", mos_c64_none),
++
+     ("aarch64_be-unknown-hermit", aarch64_be_unknown_hermit),
+     ("aarch64-unknown-hermit", aarch64_unknown_hermit),
+     ("riscv64gc-unknown-hermit", riscv64gc_unknown_hermit),
+@@ -1770,6 +1774,7 @@ pub enum Arch {
+         Mips32r6 = "mips32r6",
+         Mips64 = "mips64",
+         Mips64r6 = "mips64r6",
++        Mos = "mos",
+         Msp430 = "msp430",
+         Nvptx64 = "nvptx64",
+         PowerPC = "powerpc",
+@@ -1807,6 +1812,7 @@ pub fn desc_symbol(&self) -> Symbol {
+             Self::Mips32r6 => sym::mips32r6,
+             Self::Mips64 => sym::mips64,
+             Self::Mips64r6 => sym::mips64r6,
++            Self::Mos => sym::mos,
+             Self::Msp430 => sym::msp430,
+             Self::Nvptx64 => sym::nvptx64,
+             Self::PowerPC => sym::powerpc,
+@@ -1833,7 +1839,7 @@ pub fn supports_scalable_vectors(&self) -> bool {
+         match self {
+             AArch64 | RiscV32 | RiscV64 => true,
+             AmdGpu | Arm | Arm64EC | Avr | Bpf | CSky | Hexagon | LoongArch32 | LoongArch64
+-            | M68k | Mips | Mips32r6 | Mips64 | Mips64r6 | Msp430 | Nvptx64 | PowerPC
++            | M68k | Mips | Mips32r6 | Mips64 | Mips64r6 | Mos | Msp430 | Nvptx64 | PowerPC
+             | PowerPC64 | S390x | Sparc | Sparc64 | SpirV | Wasm32 | Wasm64 | X86 | X86_64
+             | Xtensa | Other(_) => false,
+         }
+@@ -2116,7 +2122,7 @@ pub fn supports_c_variadic_definitions(&self) -> CVariadicStatus {
+             // - Check that calling c-variadic functions defined in Rust can be called from C.
+             // For most targets `tests/run-make/c-link-to-rust-va-list-fn` can be used here.
+             // For no_std targets a manual setup may be needed.
+-            Sparc | Avr | M68k | Msp430 => {
++            Sparc | Avr | M68k | Mos | Msp430 => {
+                 CVariadicStatus::Unstable { feature: sym::c_variadic_experimental_arch }
+             }
+ 
+@@ -3082,6 +3088,7 @@ pub fn object_architecture(
+             Arch::CSky => (Architecture::Csky, None),
+             Arch::Arm64EC => (Architecture::Aarch64, Some(object::SubArchitecture::Arm64EC)),
+             Arch::AmdGpu
++            | Arch::Mos
+             | Arch::Nvptx64
+             | Arch::SpirV
+             | Arch::Wasm32
+diff --git a/compiler/rustc_target/src/spec/targets/mos_c64_none.rs b/compiler/rustc_target/src/spec/targets/mos_c64_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..dd3b4a6bffb5913da02a27b2b07e8979609b06a9
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_c64_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("c64", "mos-c64-clang", "MOS 6510, Commodore 64")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_sim_none.rs b/compiler/rustc_target/src/spec/targets/mos_sim_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7d19ceab55b0e0f32f500bdcfec18187f3612e04
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_sim_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("sim", "mos-sim-clang", "MOS 6502, llvm-mos simulator (mos-sim)")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs b/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6cbdc6132157b289acd0685e2bfd884ef5b8fe74
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("unknown", "mos-clang", "MOS 6502, no platform")
++}
+diff --git a/compiler/rustc_target/src/target_features.rs b/compiler/rustc_target/src/target_features.rs
+index 2ee7dea9f8af364ff5aa6dbf8af54436232bf43c..bef8fca94bb47305b4dcb8f3c436bb544dde4f36 100644
+--- a/compiler/rustc_target/src/target_features.rs
++++ b/compiler/rustc_target/src/target_features.rs
+@@ -1195,7 +1195,7 @@ pub fn rust_target_features(&self) -> &'static [(&'static str, Stability, Implie
+             Arch::M68k => M68K_FEATURES,
+             Arch::Avr => AVR_FEATURES,
+             Arch::Xtensa => XTENSA_FEATURES,
+-            Arch::AmdGpu | Arch::Msp430 | Arch::SpirV | Arch::Other(_) => &[],
++            Arch::AmdGpu | Arch::Mos | Arch::Msp430 | Arch::SpirV | Arch::Other(_) => &[],
+         }
+     }
+ 
+@@ -1231,7 +1231,7 @@ pub fn features_for_correct_fixed_length_vector_abi(&self) -> &'static [(u64, &'
+             Arch::CSky => CSKY_FEATURES_FOR_CORRECT_FIXED_LENGTH_VECTOR_ABI,
+             // FIXME: for some tier3 targets, we are overly cautious and always give warnings
+             // when passing args in vector registers.
+-            Arch::Msp430 | Arch::SpirV | Arch::Xtensa | Arch::Other(_) => &[],
++            Arch::Mos | Arch::Msp430 | Arch::SpirV | Arch::Xtensa | Arch::Other(_) => &[],
+         }
+     }
+ 
+diff --git a/library/core/src/ffi/primitives.rs b/library/core/src/ffi/primitives.rs
+index 11dad9a65470c126e1976efa4b9c7fef6c04e92f..cc4c9b7caf75d387957da8dc213e563e3b819ef4 100644
+--- a/library/core/src/ffi/primitives.rs
++++ b/library/core/src/ffi/primitives.rs
+@@ -176,7 +176,7 @@ mod c_long_definition {
+ 
+ mod c_int_definition {
+     crate::cfg_select! {
+-        any(target_arch = "avr", target_arch = "msp430") => {
++        any(target_arch = "avr", target_arch = "mos", target_arch = "msp430") => {
+             pub(super) type c_int = i16;
+             pub(super) type c_uint = u16;
+         }
+diff --git a/library/core/src/ffi/va_list.rs b/library/core/src/ffi/va_list.rs
+index b308cb7f85df29e69ccbb7868af564836febf6ba..5cf86028eee553b06a346e8f699329243ed24dd5 100644
+--- a/library/core/src/ffi/va_list.rs
++++ b/library/core/src/ffi/va_list.rs
+@@ -313,7 +313,7 @@ fn drop(&mut self) {
+ pub impl(self) unsafe trait VaArgSafe {}
+ 
+ crate::cfg_select! {
+-    any(target_arch = "avr", target_arch = "msp430") => {
++    any(target_arch = "avr", target_arch = "mos", target_arch = "msp430") => {
+         // c_int/c_uint are i16/u16 on these targets.
+         //
+         // - i8 is implicitly promoted to c_int in C, and cannot implement `VaArgSafe`.

@@ -38,7 +38,7 @@ When something in this plan is ambiguous or conflicts with reality (e.g. an upst
 2. **Built-in MOS targets in rustc** (patch `compiler/rustc_target/src/spec/`) rather than JSON custom targets, so that `x.py dist` can ship a prebuilt `rust-std` component for MOS targets and users on stable do not need `-Z build-std`. If this proves too invasive, fall back to JSON targets + documented `RUSTC_BOOTSTRAP=1 -Z build-std=core,alloc`. Ask before switching.
    **Naming note:** `rust-std` is the name of the rustup/dist *component* holding the precompiled libraries for a target. For MOS targets it must contain **only `core`, `alloc` and `compiler_builtins` — never `std`** (same as existing `no_std` targets such as `thumbv6m-none-eabi`). Configure the targets and bootstrap accordingly.
 3. **No cargo patch.** A vanilla cargo should work. The historical cargo fork only existed to force a patched `compiler-builtins`, which is believed to be no longer necessary. Verify in Phase 1; if a patch turns out to be needed, add `patches/cargo/` and report why.
-4. **LLVM build is cached by content hash** (Rust LLVM commit + hash of `patches/llvm/`). Rust-only updates must reuse the cached LLVM.
+4. **LLVM build is cached by content hash** (Rust LLVM commit + hash of the channel's `patches/llvm/<NN.N>/` series). Rust-only updates must reuse the cached LLVM.
 5. **Beta is tracked, not just stable.** LLVM bumps appear on beta 6–12 weeks before stable; the pipeline must prepare them in advance.
 
 ## 4. Repository layout
@@ -49,8 +49,8 @@ rust-mos-sync/
 ├── CLAUDE.md                # short conventions + pointer to PLAN.md
 ├── versions.toml            # single source of truth for current state
 ├── patches/
-│   ├── llvm/                # git format-patch series on top of rust-lang/llvm-project
-│   └── rust/                # git format-patch series on top of rust-lang/rust tag
+│   ├── llvm/<NN.N>/         # one git format-patch series per Rust LLVM branch, on top of rust-lang/llvm-project
+│   └── rust/<X.Y>/          # one git format-patch series per Rust minor version
 ├── targets/                 # target definitions (source for rustc spec patch, or JSON fallback)
 ├── config/
 │   └── bootstrap.toml.in    # template for rust's bootstrap config (config.toml on old versions)
@@ -97,7 +97,6 @@ llvm_branch = "..."
 llvm_commit = "..."
 
 [llvm_mos]
-base_merge = "<sha>"          # llvm-mos merge commit used to extract the MOS patch
 last_synced = "<sha>"         # last llvm-mos commit whose MOS-only changes were cherry-picked
 deferred = ["<sha>", ...]     # MOS commits that failed to apply; retried at next LLVM bump
 
@@ -152,7 +151,7 @@ Workflow files live in `.github/workflows/`. Prefer plain `run:` steps over thir
 
 1. List new llvm-mos commits since `last_synced`, filtered on MOS-only paths.
 2. Cherry-pick each onto the current LLVM work branch. Any commit that does not apply cleanly or breaks the MOS lit tests goes into `deferred` — do **not** involve Claude Code here, do not block.
-3. Rebuild LLVM, run tests, regenerate `patches/llvm/`, open a PR.
+3. Rebuild LLVM, run tests, regenerate the series in `patches/llvm/<NN.N>/`, open a PR.
 
 ### 7.4 `llvm-bump.yml`
 
@@ -307,8 +306,8 @@ validation once a genuine new stable Rust tag lands upstream.
 **Phase 5 — Claude Code conflict resolution.**
 Headless invocation, guardrails, prompts in `ci/claude/`, reports in PRs. Test it by replaying a past conflict.
 
-**Phase 6 — LLVM bumps.**
-`llvm-bump.yml`, driven from beta. *Done when:* a simulated bump (previous → current Rust LLVM branch) completes end to end.
+**Phase 6 — LLVM bumps. Implemented 2026-10-01, pending a real run.**
+`llvm-bump.yml`, driven from beta. One MOS patch series per LLVM version (`patches/llvm/<NN.N>/`, with the llvm-mos merge it was extracted from in `BASE_MERGE`) so stable can stay on the old LLVM while beta's bump is prepared: each channel uses the series of its own `llvm_branch`, `detect.sh` reports `llvm-bump` when a branch has none, `llvm_mos.patched_branch` is gone. `scripts/llvm-bump.sh <channel>` extracts the patch (clang/lld/compiler-rt left out: we build LLVM only), applies it, resolves upstream-drift conflicts in other targets/non-MOS tests to the Rust side, and exits 2 on real ones (resolve in `work/llvm-project`, then `--continue`). **Known gap (2026-10-02):** two `CodeGen/MOS` lit tests (`legalizer.mir`, `shift-rotate.ll`) fail on 23.1 on instruction order in their CHECK lines (same instructions, different order after LLVM 23's changes). They are listed in `patches/llvm/23.1/KNOWN_LIT_FAILURES`, which `test.sh` tier 1 reports as WARN instead of failing, until the generated code is verified on a working example (the maintainer's call: end-to-end `hello` on `mos-sim`, then either fix the CHECKs or prove the output equivalent, then delete the file). Any other failing lit test still fails the tier. `patches/rust/` got the same layout (`<X.Y>/`, the version read from the checkout's `src/version`): beta's Rust 1.100 needed its own series (different `STAGE0_MISSING_TARGETS`, a `va_arg.rs` arm, and bootstrap pins `cc` 1.2.62 where stable pins 1.2.28, so the vendored `cc` of patch 0003 differs per version); `patches/rust/1.98/` is stable's. A new minor with no series yet fails `apply.sh` with exit 2 (copy the nearest series and resolve). The 23.1 series (beta) was produced this way, with 7 hand-resolved conflicts and a port of the MOS `llvm-readobj`/`MOSFlags` code to 23's `EnumStrings` API. *Done when:* a simulated bump (previous → current Rust LLVM branch) completes end to end.
 
 **Phase 7 — Distribution polish.**
 Beta→stable promotion, rustup manifests, additional hosts.
