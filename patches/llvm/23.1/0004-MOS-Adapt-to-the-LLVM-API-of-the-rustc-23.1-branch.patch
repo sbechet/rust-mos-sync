@@ -18,17 +18,21 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
 - MCAsmInfoELF has no default constructor: it takes the MCTargetOptions.
 - -gen-callingconv output is guarded by GET_CALLING_CONV_IMPL now.
 - The prologepilog pass is called prolog-epilog (two MIR tests' RUN lines).
+- all_combines gained select_zero_false (select c, x, 0 -> and c, freeze x),
+  whose generated apply code builds an s1 G_AND without checking legality;
+  MOS has no such instruction, so the rule is disabled in MOSCombiner.
 ---
  llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp        | 4 ++--
  llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp     | 3 ++-
  llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp | 2 +-
  llvm/lib/Target/MOS/MOSCallingConv.cpp                | 1 +
+ llvm/lib/Target/MOS/MOSCombiner.cpp                   | 5 +++++
  llvm/lib/Target/MOS/MOSInstrInfo.cpp                  | 2 +-
  llvm/lib/Target/MOS/MOSLegalizerInfo.cpp              | 7 ++++---
  llvm/lib/Target/MOS/MOSTargetMachine.cpp              | 4 ----
  llvm/test/CodeGen/MOS/prologepilog-ir.mir             | 4 ++--
  llvm/test/CodeGen/MOS/prologepilog.mir                | 2 +-
- 9 files changed, 14 insertions(+), 15 deletions(-)
+ 10 files changed, 19 insertions(+), 15 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -82,6 +86,22 @@ index 993ce3787622a7be8edc654c0a3941f431ca782a..9b5546351485521bee0ebbd65c7462a4
  
 +#define GET_CALLING_CONV_IMPL
  #include "MOSGenCallingConv.inc"
+diff --git a/llvm/lib/Target/MOS/MOSCombiner.cpp b/llvm/lib/Target/MOS/MOSCombiner.cpp
+index bff8495ed6115bf69a61f97e9133e86453d38f99..7584dcf872810518a4ba747dd4769025b0a76254 100644
+--- a/llvm/lib/Target/MOS/MOSCombiner.cpp
++++ b/llvm/lib/Target/MOS/MOSCombiner.cpp
+@@ -753,6 +753,11 @@ void MOSCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
+ MOSCombiner::MOSCombiner() : MachineFunctionPass(ID) {
+   initializeMOSCombinerPass(*PassRegistry::getPassRegistry());
+ 
++  // select c, x, 0 -> and c, (freeze x) was added to all_combines in LLVM 23.
++  // Its generated apply code does not check legality, and MOS has no s1 G_AND
++  // (it would be left unselectable after the legalizer).
++  if (!RuleConfig.setRuleDisabled("select_zero_false"))
++    report_fatal_error("select_zero_false is not a rule of this combiner");
+   if (!RuleConfig.parseCommandLineOption())
+     report_fatal_error("Invalid rule identifier");
+ }
 diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.cpp b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
 index 42a94c356e6769d816d7877162c94cef1e67beee..860ff03a3676c3857e2eaef5ea316def8ae5d1bd 100644
 --- a/llvm/lib/Target/MOS/MOSInstrInfo.cpp
