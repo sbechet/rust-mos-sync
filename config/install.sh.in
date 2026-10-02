@@ -26,15 +26,21 @@ case "$(uname -s)-$(uname -m)" in
     Linux-x86_64) sdk_asset=llvm-mos-linux.tar.xz ;;
     *) echo "error: only Linux x86_64 hosts are published so far" >&2; exit 1 ;;
 esac
-case "$channel" in
-    # /releases/latest is GitHub's own "newest non-prerelease, non-draft"
-    # release - exactly the versioned stable tag we want, without needing
-    # to parse a whole release list. Beta is a single rolling pre-release
-    # (release.yml replaces its assets in place), always tagged "beta".
-    stable) release_tag=$(curl -sSf "https://api.github.com/repos/$repo/releases/latest" \
-                | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/') ;;
-    beta) release_tag=beta ;;
-    *) echo "usage: install.sh [stable|beta] [toolchain-name]" >&2; exit 1 ;;
+# release.yml fills in the tag of the release this script is attached to, so
+# an old release installs itself, not whatever is newest. "Always the latest
+# stable" is the script of the latest release:
+#   curl -fsSL https://github.com/sbechet/rust-mos-sync/releases/latest/download/install-stable.sh | bash
+release_tag="@RELEASE_TAG@"
+case "$release_tag" in
+    @*)  # unrendered template (run from a checkout): resolve the tag here
+        case "$channel" in
+            # /releases/latest is GitHub's own "newest non-prerelease,
+            # non-draft" release. Beta is a single rolling pre-release.
+            stable) release_tag=$(curl -sSf "https://api.github.com/repos/$repo/releases/latest" \
+                        | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/') ;;
+            beta) release_tag=beta ;;
+            *) echo "usage: install.sh [stable|beta] [toolchain-name]" >&2; exit 1 ;;
+        esac ;;
 esac
 [ -n "$release_tag" ] || { echo "error: no $channel release found on $repo" >&2; exit 1; }
 

@@ -14,6 +14,16 @@ on:
         description: "Name of the already-uploaded toolchain-*.tar.xz artifact"
         required: true
         type: string
+      versions_ref:
+        description: "Git ref whose versions.toml to build (re-publishing an old release); empty = this commit's"
+        required: false
+        type: string
+        default: ""
+      historic:
+        description: "True when re-publishing an old release: no moving tags (docker-tags.sh)"
+        required: false
+        type: boolean
+        default: false
       release:
         description: >-
           True only from release.yml: also push the versioned tags
@@ -38,6 +48,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: versions.toml of the release being re-published
+        if: inputs.versions_ref != ''
+        run: |
+          git fetch -q --depth=1 origin "${{ inputs.versions_ref }}"
+          git checkout FETCH_HEAD -- versions.toml
+
       - name: Toolchain artifact
         uses: actions/download-artifact@v4
         with:
@@ -60,7 +76,7 @@ jobs:
           GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           . scripts/lib.sh
-          tags=$(scripts/docker-tags.sh "${{ inputs.channel }}" "${{ inputs.release }}" "${{ github.sha }}")
+          tags=$(scripts/docker-tags.sh "${{ inputs.channel }}" "${{ inputs.release }}" "${{ github.sha }}" "${{ inputs.historic }}")
           ch="${{ inputs.channel }}"
           if [ "$ch" = stable ]; then rust=$(ver_get rust.stable.tag); else rust=$(ver_get rust.beta.tag); fi
           llvm_branch=$(ver_get "rust.$ch.llvm_branch")
