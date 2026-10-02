@@ -136,10 +136,15 @@ duplicating them), pushed to `ghcr.io/<owner>/rust-mos`:
   standalone `bin/`+`lib/`);
 - one `CARGO_TARGET_<TRIPLE>_LINKER` env var per built-in MOS target, so a
   project needs no `.cargo/config.toml` of its own;
-- tagged `<channel>` (`stable`/`beta`), `sha-<commit>`, and — only when
-  called from `release.yml` — the version tag too
-  (`v1.98.1-mos.1`/`beta`). `linux/amd64` only for now, `linux/arm64` once
-  an aarch64 toolchain exists.
+- tagged by `scripts/docker-tags.sh`: always the moving `<channel>`
+  (`stable`/`beta`) and `sha-<commit>` (debugging); and, only when called
+  from `release.yml`, the immutable version tags - stable
+  `<X.Y.Z>-mos.<N>` plus the moving `<X.Y>`, beta
+  `<X.Y.Z>-beta-mos.<commit7>` (a beta has no revision counter: it is the
+  first 7 characters of the Rust beta commit). No `v` prefix, unlike the
+  GitHub release tags (`v1.98.1-mos.1`). Labels carry the channel, Rust
+  version, LLVM version/commit and SDK release. `linux/amd64` only for now,
+  `linux/arm64` once an aarch64 toolchain exists.
 - smoke-tested before every push: builds and runs `tests/programs/hello` on
   `mos-sim` inside the image, and builds it for `mos-c64-none` (link-only,
   nothing to run in CI).

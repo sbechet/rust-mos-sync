@@ -16,12 +16,13 @@ on:
         type: string
       release:
         description: >-
-          True only from release.yml: also push the version tag
-          (v<rust.stable.tag>-mos.<mos_revision>, computed here from
+          True only from release.yml: also push the versioned tags
+          (scripts/docker-tags.sh: <X.Y.Z>-mos.<N> and <X.Y> for stable,
+          <X.Y.Z>-beta-mos.<commit7> for beta), computed there from
           versions.toml so it never depends on matrix job outputs, which
           GitHub Actions does not pair by matrix key across jobs). False
           from build.yml's manual/ad hoc test dispatch, which must never
-          push a version tag for an untested channel state.
+          push a versioned tag for an untested channel state.
         required: false
         type: boolean
         default: false
@@ -53,25 +54,27 @@ jobs:
           echo "release=$(ver_get llvm_mos_sdk.release)" >> "$GITHUB_OUTPUT"
           echo "sha256=$(ver_get llvm_mos_sdk.sha256)" >> "$GITHUB_OUTPUT"
 
-      - name: Tags to push
+      - name: Tags and labels to push
         id: tags
+        env:
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
-          tags="ghcr.io/${{ github.repository_owner }}/rust-mos:${{ inputs.channel }}
-          ghcr.io/${{ github.repository_owner }}/rust-mos:sha-${{ github.sha }}"
-          # Beta's "version tag" is the rolling `beta` tag itself (already
-          # above), so there is nothing extra to add for it - only stable
-          # gets a second, immutable, numbered tag.
-          if [ "${{ inputs.release }}" = true ] && [ "${{ inputs.channel }}" = stable ]; then
-            . scripts/lib.sh
-            version_tag="v$(ver_get rust.stable.tag)-mos.$(ver_get release.mos_revision)"
-            tags="$tags
-          ghcr.io/${{ github.repository_owner }}/rust-mos:$version_tag"
-          fi
+          . scripts/lib.sh
+          tags=$(scripts/docker-tags.sh "${{ inputs.channel }}" "${{ inputs.release }}" "${{ github.sha }}")
+          ch="${{ inputs.channel }}"
+          if [ "$ch" = stable ]; then rust=$(ver_get rust.stable.tag); else rust=$(ver_get rust.beta.tag); fi
+          llvm_branch=$(ver_get "rust.$ch.llvm_branch")
           {
-            echo "tags<<TAGSEOF"
-            echo "$tags"
-            echo "TAGSEOF"
+            echo "tags<<TAGSEOF"; echo "$tags"; echo "TAGSEOF"
+            echo "labels<<LABELSEOF"
+            echo "org.opencontainers.image.version=$rust ($ch)"
+            echo "io.github.sbechet.rust-mos.channel=$ch"
+            echo "io.github.sbechet.rust-mos.rust=$rust"
+            echo "io.github.sbechet.rust-mos.llvm=$(llvm_version_of_branch "$llvm_branch") ($llvm_branch @ $(ver_get "rust.$ch.llvm_commit" | cut -c1-12))"
+            echo "io.github.sbechet.rust-mos.llvm-mos-sdk=$(ver_get llvm_mos_sdk.release)"
+            echo "LABELSEOF"
           } >> "$GITHUB_OUTPUT"
+          echo "$tags"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -125,6 +128,7 @@ jobs:
           context: docker
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+          labels: ${{ steps.tags.outputs.labels }}
           build-args: |
             SDK_RELEASE=${{ steps.sdk.outputs.release }}
             SDK_SHA256=${{ steps.sdk.outputs.sha256 }}
