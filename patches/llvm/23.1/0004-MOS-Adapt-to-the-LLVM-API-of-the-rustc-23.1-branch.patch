@@ -1,0 +1,244 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Thu, 1 Oct 2026 12:51:07 +0000
+Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
+
+- TargetMachine::resetTargetOptions was removed upstream; per-function code
+  generation flags no longer live in TargetOptions, so there is nothing to
+  reset before creating a subtarget.
+- MCTargetAsmParser and the MCAsmParser constructor registered by
+  RegisterMCAsmParser no longer take MCTargetOptions.
+- GlobalISel: G_CTLZ/CTTZ_ZERO_UNDEF became _ZERO_POISON, the legacy legalizer
+  tables are gone (no computeTables), and LegalizerHelper::lowerMemcpyInline
+  is folded into lowerMemCpyFamily (which handles G_MEMCPY_INLINE).
+- The legacy tables also made opcodes they had no rules for legal by default:
+  G_BR now needs an explicit alwaysLegal(), and G_FNEG/G_FMAD (lower) and
+  G_FPOWI/G_FLDEXP (libcall) are declared.
+- TargetMachine::getMCAsmInfo returns a reference, and
+  MCStreamer::emitCodeAlignment takes the subtarget by reference.
+- MCAsmInfoELF has no default constructor: it takes the MCTargetOptions.
+- -gen-callingconv output is guarded by GET_CALLING_CONV_IMPL now.
+- The prologepilog pass is called prolog-epilog (two MIR tests' RUN lines).
+- all_combines gained select_zero_false (select c, x, 0 -> and c, freeze x),
+  whose generated apply code builds an s1 G_AND without checking legality;
+  MOS has no such instruction, so MOSCombiner uses mos_all_combines, a copy
+  of all_combines without it (rules cannot be disabled by name in release
+  builds).
+---
+ .../lib/Target/MOS/AsmParser/MOSAsmParser.cpp |  4 +--
+ .../Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp  |  3 +-
+ .../MOS/MCTargetDesc/MOSMCELFStreamer.cpp     |  2 +-
+ llvm/lib/Target/MOS/MOSCallingConv.cpp        |  1 +
+ llvm/lib/Target/MOS/MOSCombine.td             | 35 ++++++++++++++++++-
+ llvm/lib/Target/MOS/MOSInstrInfo.cpp          |  2 +-
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp      | 15 ++++++--
+ llvm/lib/Target/MOS/MOSTargetMachine.cpp      |  4 ---
+ llvm/test/CodeGen/MOS/prologepilog-ir.mir     |  4 +--
+ llvm/test/CodeGen/MOS/prologepilog.mir        |  2 +-
+ 10 files changed, 56 insertions(+), 16 deletions(-)
+
+diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
+index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
+--- a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
++++ b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
+@@ -253,8 +253,8 @@ public:
+   };
+ 
+   MOSAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
+-               const MCInstrInfo &MII, const MCTargetOptions &Options)
+-      : MCTargetAsmParser(Options, STI, MII), Parser(Parser) {
++               const MCInstrInfo &MII)
++      : MCTargetAsmParser(STI, MII), Parser(Parser) {
+     MCAsmParserExtension::Initialize(Parser);
+     MRI = getContext().getRegisterInfo();
+ 
+diff --git a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp
+index 2b8a68ca81000e74cfdd8e97d2cbac6ac1e35d3b..04acf974fba6e32d83a2ff39df871c94319d5c23 100644
+--- a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp
++++ b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp
+@@ -34,7 +34,8 @@ static const MCAsmInfo::AtSpecifier AtSpecifiers[] = {
+     {MOSMCExpr::VK_ADDR13, "mos13"},
+ };
+ 
+-MOSMCAsmInfo::MOSMCAsmInfo(const Triple &TT, const MCTargetOptions &Options) {
++MOSMCAsmInfo::MOSMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
++    : MCAsmInfoELF(Options) {
+   // While the platform uses 2-byte pointers, the ELF files use 4-byte pointers
+   // to convey banking information; this field is used, among others, by the
+   // DWARF debug structures.
+diff --git a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
+index 77cf4e82743c8779be8f55b86e72faf152f040b1..b662ffd1a8fff760020b440cab942ce708aa43bd 100644
+--- a/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
++++ b/llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp
+@@ -37,7 +37,7 @@ void MOSMCELFStreamer::initSections(const MCSubtargetInfo &STI) {
+ 
+   MCContext &Ctx = getContext();
+   switchSection(Ctx.getObjectFileInfo()->getTextSection());
+-  emitCodeAlignment(Align(1), &STI);
++  emitCodeAlignment(Align(1), STI);
+ }
+ 
+ static bool HasPrefix(StringRef Name, StringRef Prefix) {
+diff --git a/llvm/lib/Target/MOS/MOSCallingConv.cpp b/llvm/lib/Target/MOS/MOSCallingConv.cpp
+index 993ce3787622a7be8edc654c0a3941f431ca782a..9b5546351485521bee0ebbd65c7462a41249018c 100644
+--- a/llvm/lib/Target/MOS/MOSCallingConv.cpp
++++ b/llvm/lib/Target/MOS/MOSCallingConv.cpp
+@@ -15,4 +15,5 @@
+ #include "llvm/CodeGen/MachineFunction.h"
+ #include "llvm/IR/DataLayout.h"
+ 
++#define GET_CALLING_CONV_IMPL
+ #include "MOSGenCallingConv.inc"
+diff --git a/llvm/lib/Target/MOS/MOSCombine.td b/llvm/lib/Target/MOS/MOSCombine.td
+index 7a064aa3591a4f0fbbe8e0785a41eb0f5f0638d8..a0c46b2a7fb8aa06b19b7c14488a02711a869276 100644
+--- a/llvm/lib/Target/MOS/MOSCombine.td
++++ b/llvm/lib/Target/MOS/MOSCombine.td
+@@ -88,8 +88,41 @@ def mul_to_shift_and_add : GICombineRule<
+           [{ return matchMulToShiftAndAdd(*${root}, ${matchinfo}); }]),
+   (apply [{ Helper.applyBuildFnNoErase(*${root}, ${matchinfo}); }])>;
+ 
++// LLVM 23's all_combines minus select_zero_false (select c, x, 0 -> and c,
++// freeze x): its generated apply code builds an s1 G_AND without checking
++// legality, and MOS has no s1 G_AND (cannot select after the legalizer).
++// Names are those of all_combines in the rustc/23.1 branch's Combine.td.
++def mos_all_combines : GICombineGroup<[
++    integer_reassoc_combines, trivial_combines, vector_ops_combines,
++    freeze_combines, cast_combines, insert_vec_elt_combines,
++    extract_vec_elt_combines, combines_for_extload,
++    combine_extracted_vector_load, undef_combines, identity_combines,
++    phi_combines, simplify_add_to_sub, hoist_logic_op_with_same_opcode_hands,
++    shifts_too_big, reassocs, ptr_add_immed_chain, cmp_combines,
++    shl_ashr_to_sext_inreg, neg_and_one_to_sext_inreg, sext_inreg_of_load,
++    width_reduction_combines, select_combines, select_not,
++    known_bits_simplifications, trunc_shift, not_cmp_fold,
++    opt_brcond_by_inverting_cond, const_combines, xor_of_and_with_same_reg,
++    ptr_add_with_zero, shift_immed_chain, shift_of_shifted_logic_chain,
++    load_or_combine, div_rem_to_divrem, funnel_shift_combines,
++    bitreverse_shift, commute_shift, form_bitfield_extract,
++    constant_fold_binops, constant_fold_fma, constant_fold_cast_op,
++    constant_fold_unary_int_op, fabs_fneg_fold, mulh_combines,
++    redundant_neg_operands, and_or_disjoint_mask, fma_combines,
++    fold_binop_into_select, intrem_combines, intdiv_combines,
++    fdiv_repeated_divison, sub_add_reg, select_to_minmax, fsub_to_fneg,
++    commute_constant_to_rhs, match_ands, match_ors, or_and_xor_combines,
++    simplify_neg_minmax, combine_concat_vector, sext_trunc, zext_trunc,
++    prefer_sign_combines, shuffle_combines, combine_use_vector_truncate,
++    merge_combines, overflow_combines, truncsat_combines,
++    lshr_of_trunc_of_lshr, ctls_combines, add_shift, sub_one_from_sub,
++    binop_with_neg, sub_minus_one, sub_of_mul_const, max_min_combines,
++    avgfloor_u_match, avgfloor_s_match, avgceil_u_match, avgceil_s_match,
++    combine_or_of_and
++]>;
++
+ def MOSCombiner : GICombiner<"MOSCombinerImpl", [
+-  all_combines,
++  mos_all_combines,
+   fold_global_offset,
+   extract_low_bit,
+   uaddo_1,
+diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.cpp b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
+index 42a94c356e6769d816d7877162c94cef1e67beee..860ff03a3676c3857e2eaef5ea316def8ae5d1bd 100644
+--- a/llvm/lib/Target/MOS/MOSInstrInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
+@@ -205,7 +205,7 @@ unsigned MOSInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
+     return 0;
+ 
+   const MachineFunction &MF = *MI.getParent()->getParent();
+-  const MCAsmInfo &MCAI = *MF.getTarget().getMCAsmInfo();
++  const MCAsmInfo &MCAI = MF.getTarget().getMCAsmInfo();
+ 
+   switch (MI.getOpcode()) {
+   default: {
+diff --git a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..1bb109825ed471e08c1a1a5e4dc1ccd70ec2a633 100644
+--- a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+@@ -255,7 +255,7 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+   getActionDefinitionsBuilder({G_FSHL, G_FSHR}).lower();
+ 
+   getActionDefinitionsBuilder(
+-      {G_CTLZ, G_CTTZ, G_CTPOP, G_CTLZ_ZERO_UNDEF, G_CTTZ_ZERO_UNDEF})
++      {G_CTLZ, G_CTTZ, G_CTPOP, G_CTLZ_ZERO_POISON, G_CTTZ_ZERO_POISON})
+       .lower();
+ 
+   // Floating Point Operations
+@@ -306,6 +306,14 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+ 
+   getActionDefinitionsBuilder(G_FABS).custom();
+ 
++  // No type-less default any more (LLVM <= 22's legacy tables made these
++  // legal and the selector then had no pattern for them): G_FNEG flips the
++  // sign bit through the integer type, G_FMAD is a multiply and an add.
++  getActionDefinitionsBuilder({G_FNEG, G_FMAD}).lower();
++  getActionDefinitionsBuilder({G_FPOWI, G_FLDEXP})
++      .libcallFor({{S32, S32}, {S64, S32}})
++      .unsupported();
++
+   getActionDefinitionsBuilder({G_FCOPYSIGN, G_IS_FPCLASS}).lower();
+ 
+   getActionDefinitionsBuilder(G_FCANONICALIZE).custom();
+@@ -357,6 +365,8 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+       .maxScalar(0, S8)
+       .unsupported();
+ 
++  // No type operands, so LLVM <= 22's legacy tables made it legal by default.
++  getActionDefinitionsBuilder(G_BR).alwaysLegal();
+   getActionDefinitionsBuilder(G_BRCOND).customFor({S1}).unsupported();
+ 
+   getActionDefinitionsBuilder(G_BRINDIRECT).legalFor({P});
+@@ -384,7 +394,6 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+       .maxScalar(0, S8)
+       .unsupported();
+ 
+-  getLegacyLegalizerInfo().computeTables();
+   verify(*STI.getInstrInfo());
+ }
+ 
+@@ -2000,7 +2009,7 @@ bool MOSLegalizerInfo::legalizeMemOp(LegalizerHelper &Helper,
+ 
+   // Try lowering, keeping in mind the size limit.
+   if (IsInline) {
+-    Result = Helper.lowerMemcpyInline(MI);
++    Result = Helper.lowerMemCpyFamily(MI);
+   } else {
+     Result = Helper.lowerMemCpyFamily(MI, SizeLimit);
+   }
+diff --git a/llvm/lib/Target/MOS/MOSTargetMachine.cpp b/llvm/lib/Target/MOS/MOSTargetMachine.cpp
+index 3bb679dac9c3bb5b639990d52bb89e849c02a04d..aaa39b872147c2fedbb0a46e7d195d0057db6832 100644
+--- a/llvm/lib/Target/MOS/MOSTargetMachine.cpp
++++ b/llvm/lib/Target/MOS/MOSTargetMachine.cpp
+@@ -113,10 +113,6 @@ MOSTargetMachine::getSubtargetImpl(const Function &F) const {
+ 
+   auto &I = SubtargetMap[CPU + FS];
+   if (!I) {
+-    // This needs to be done before we create a new subtarget since any
+-    // creation will depend on the TM and the code generation flags on the
+-    // function that reside in TargetOptions.
+-    resetTargetOptions(F);
+     I = std::make_unique<MOSSubtarget>(TargetTriple, CPU, FS, *this);
+   }
+   return I.get();
+diff --git a/llvm/test/CodeGen/MOS/prologepilog-ir.mir b/llvm/test/CodeGen/MOS/prologepilog-ir.mir
+index 23cb2c7b64e8fa5c3fa5afb9fe5fb0f652f514a1..3584893d7e044c796bf7c58baf3b87e0e8697d30 100644
+--- a/llvm/test/CodeGen/MOS/prologepilog-ir.mir
++++ b/llvm/test/CodeGen/MOS/prologepilog-ir.mir
+@@ -1,6 +1,6 @@
+ # NOTE: Assertions have been autogenerated by utils/update_mir_test_checks.py
+-# RUN: llc -mtriple=mos -run-pass=prologepilog -verify-machineinstrs -o - %s | FileCheck %s -check-prefixes=6502
+-# RUN: llc -mtriple=mos -mcpu=mos65c02 -run-pass=prologepilog -verify-machineinstrs -o - %s | FileCheck %s -check-prefixes=65C02
++# RUN: llc -mtriple=mos -run-pass=prolog-epilog -verify-machineinstrs -o - %s | FileCheck %s -check-prefixes=6502
++# RUN: llc -mtriple=mos -mcpu=mos65c02 -run-pass=prolog-epilog -verify-machineinstrs -o - %s | FileCheck %s -check-prefixes=65C02
+ --- |
+   target datalayout = "e-p:16:8:8-p1:8:8-i16:8:8-i32:8:8-i64:8:8-f32:8:8-f64:8:8-a:8:8-Fi8-n8"
+   target triple = "mos"
+diff --git a/llvm/test/CodeGen/MOS/prologepilog.mir b/llvm/test/CodeGen/MOS/prologepilog.mir
+index 799dcf29649c5e1c223db8365c08a71d90dad324..4fa2e3acd73fa3c07a3e15510a38d3a67eaaa05a 100644
+--- a/llvm/test/CodeGen/MOS/prologepilog.mir
++++ b/llvm/test/CodeGen/MOS/prologepilog.mir
+@@ -1,5 +1,5 @@
+ # NOTE: Assertions have been autogenerated by utils/update_mir_test_checks.py
+-# RUN: llc -mtriple=mos -run-pass=prologepilog -verify-machineinstrs -o - %s | FileCheck %s
++# RUN: llc -mtriple=mos -run-pass=prolog-epilog -verify-machineinstrs -o - %s | FileCheck %s
+ ---
+ name: addrlostk
+ stack:

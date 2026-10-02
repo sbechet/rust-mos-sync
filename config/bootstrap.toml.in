@@ -35,7 +35,9 @@ lld = false
 llvm-tools = false
 llvm-bitcode-linker = false
 codegen-backends = ["llvm"]
-omit-git-hash = false
+# Beta only: bootstrap numbers a beta from `git rev-list --merges
+# refs/remotes/origin/main..HEAD`, which our shallow checkout cannot answer.
+omit-git-hash = @OMIT_GIT_HASH@
 
 [dist]
 compression-formats = ["xz"]

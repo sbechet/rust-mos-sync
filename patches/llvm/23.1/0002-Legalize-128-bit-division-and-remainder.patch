@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Sun, 27 Sep 2026 17:42:08 +0000
+Subject: [PATCH] Legalize 128-bit division and remainder
+
+G_SDIV/G_SREM/G_UDIV/G_UREM were clamped to a max of S64 before
+reaching the generic .libcall() action, so S128 (needed by Rust's
+i128/u128, e.g. formatting) fell through unhandled: "unable to
+legalize instruction: G_UREM s128". Unlike G_MUL, division has no
+narrowing algorithm that reduces a wide divide to the target word
+size, so the fix is to widen the clamp to S128 rather than add a
+custom narrowing path: the generic legalizer already resolves S128 to
+the __udivti3/__divti3/__umodti3/__modti3 libcalls that
+compiler_builtins provides for every other 32-bit-and-under target.
+---
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+index 8ba6b0b13f54c9d1a756275bcee0485062fc8d6e..d483eba6fff354cb204201540f4e6fbebd4ea048 100644
+--- a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
++++ b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
+@@ -65,6 +65,7 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+   LLT S16 = LLT::scalar(16);
+   LLT S32 = LLT::scalar(32);
+   LLT S64 = LLT::scalar(64);
++  LLT S128 = LLT::scalar(128);
+   LLT P = LLT::pointer(0, 16);
+   LLT PZ = LLT::pointer(1, 8);
+ 
+@@ -170,7 +171,13 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+       .unsupported();
+ 
+   getActionDefinitionsBuilder({G_SDIV, G_SREM, G_UDIV, G_UREM})
+-      .clampScalar(0, S8, S64)
++      // Unlike G_MUL, division has no narrowing algorithm that reduces a wide
++      // divide to ones the target word size actually needs: whole-width
++      // libcalls (rust-mos-sync: __udivti3 and friends, as used by Rust's
++      // i128/u128) are the only lowering, so the clamp must reach S128 rather
++      // than stop at S64 (where the generic legalizer previously left S128
++      // unhandled: "unable to legalize instruction: G_UREM s128").
++      .clampScalar(0, S8, S128)
+       .widenScalarToNextPow2(0)
+       .libcall();
+ 

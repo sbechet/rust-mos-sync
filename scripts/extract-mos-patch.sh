@@ -68,13 +68,18 @@ if [ ! -d "$ex" ]; then
 fi
 git -C "$ex" fetch -q --depth=1 --filter=blob:none origin "$merge" "$parent"
 
-# Excluded: upstream-irrelevant repo plumbing and subprojects we never build.
+# Excluded: upstream-irrelevant repo plumbing and subprojects we never build:
+# build-llvm.sh builds LLVM only (clang and lld come from the llvm-mos SDK),
+# and their hunks are where a merge from a distant upstream conflicts most
+# (e.g. clang/lib/CodeGen/CGStmt.cpp, 23.1 vs a merge 10k commits older).
+# patches/llvm/0001 predates this and still carries them; it applies as is.
 excludes=(':!.github' ':!lldb' ':!local-bin' ':!README.md' ':!CONTRIBUTING.md'
-          ':!AUTHORS' ':!NOTICE')
+          ':!AUTHORS' ':!NOTICE' ':!clang' ':!clang-tools-extra' ':!lld'
+          ':!compiler-rt' ':!cross-project-tests')
 git -C "$ex" diff --binary --full-index "$parent" "$merge" -- . "${excludes[@]}" > "$out/mos.patch"
 git -C "$ex" diff --name-only "$parent" "$merge" -- . "${excludes[@]}" \
-    | grep -vE '^(llvm/lib/Target/MOS/|llvm/test/[^/]+/MOS/|clang/|lld/)' > "$out/outside-mos.txt" || true
+    | grep -vE '^(llvm/lib/Target/MOS/|llvm/test/[^/]+/MOS/)' > "$out/outside-mos.txt" || true
 log "patch: $(git -C "$ex" diff --shortstat "$parent" "$merge" -- . "${excludes[@]}")"
-log "$(wc -l < "$out/outside-mos.txt") files outside MOS/clang/lld listed in $out/outside-mos.txt"
+log "$(wc -l < "$out/outside-mos.txt") files outside the MOS backend listed in $out/outside-mos.txt"
 
 echo "$merge $parent"

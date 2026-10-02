@@ -1,0 +1,623 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Wed, 30 Sep 2026 16:22:36 +0000
+Subject: [PATCH] rust_target: add every remaining llvm-mos-sdk platform as a
+ MOS target
+
+32 more built-in mos-<platform>-none targets (docs/backlog.md item 1),
+covering every mos-<platform>-clang driver in llvm-mos-sdk's README
+(Apple II, Atari 2600/5200/8-bit variants, Atari Lynx, Ben Eater's
+breadboard, Commander X16, Commodore 128/PET/VIC-20, CP/M-65, Dodo,
+GEOS, MEGA65, every NES mapper + FDS, Ohio Scientific, Neo6502,
+RP6502, PC Engine (+CD), RPC/8e, Watara Supervision).
+
+base::mos::target() now takes an explicit cpu, since a few platforms
+widen the ISA beyond plain mos6502 (mosw65c02/mos65c02/mos45gs02/
+moshuc6280/mos65el02) or restrict it to undocumented opcodes only
+(mos6502x, Atari 2600) - matched to each platform's own clang.cfg
+default (inherited from its SDK PARENT platform when it sets none
+itself), not the CMake-internal flags some platforms use to build
+their own C library. build-rust.sh and test.sh's std tier discover
+mos-* targets generically, so all 32 get built and core/alloc-tested
+without further script changes.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HQ3NU61e5cSU6oYFJ1J76p
+---
+ compiler/rustc_target/src/spec/base/mos.rs    |  8 ++++-
+ compiler/rustc_target/src/spec/mod.rs         | 32 +++++++++++++++++++
+ .../src/spec/targets/mos_apple2_none.rs       |  5 +++
+ .../src/spec/targets/mos_atari2600_3e_none.rs |  5 +++
+ .../src/spec/targets/mos_atari2600_4k_none.rs |  5 +++
+ .../targets/mos_atari5200_supercart_none.rs   |  5 +++
+ .../targets/mos_atari8_cart_megacart_none.rs  |  5 +++
+ .../spec/targets/mos_atari8_cart_std_none.rs  |  5 +++
+ .../spec/targets/mos_atari8_cart_xegs_none.rs |  5 +++
+ .../src/spec/targets/mos_atari8_dos_none.rs   |  2 +-
+ .../src/spec/targets/mos_c128_none.rs         |  5 +++
+ .../src/spec/targets/mos_c64_none.rs          |  2 +-
+ .../src/spec/targets/mos_cpm65_none.rs        |  5 +++
+ .../src/spec/targets/mos_cx16_none.rs         |  5 +++
+ .../src/spec/targets/mos_dodo_none.rs         |  5 +++
+ .../src/spec/targets/mos_eater_none.rs        |  5 +++
+ .../src/spec/targets/mos_fds_none.rs          |  5 +++
+ .../src/spec/targets/mos_geos_cbm_none.rs     |  5 +++
+ .../src/spec/targets/mos_lynx_bll_none.rs     |  5 +++
+ .../src/spec/targets/mos_mega65_none.rs       |  5 +++
+ .../src/spec/targets/mos_neo6502_none.rs      |  5 +++
+ .../src/spec/targets/mos_nes_action53_none.rs |  5 +++
+ .../src/spec/targets/mos_nes_cnrom_none.rs    |  5 +++
+ .../src/spec/targets/mos_nes_gtrom_none.rs    |  5 +++
+ .../src/spec/targets/mos_nes_mmc1_none.rs     |  5 +++
+ .../src/spec/targets/mos_nes_mmc3_none.rs     |  5 +++
+ .../src/spec/targets/mos_nes_nrom_none.rs     |  2 +-
+ .../spec/targets/mos_nes_unrom_512_none.rs    |  5 +++
+ .../src/spec/targets/mos_nes_unrom_none.rs    |  5 +++
+ .../src/spec/targets/mos_osi_c1p_none.rs      |  5 +++
+ .../src/spec/targets/mos_pce_cd_none.rs       |  5 +++
+ .../src/spec/targets/mos_pce_none.rs          |  5 +++
+ .../src/spec/targets/mos_pet_none.rs          |  5 +++
+ .../src/spec/targets/mos_rp6502_none.rs       |  5 +++
+ .../src/spec/targets/mos_rpc8e_none.rs        |  5 +++
+ .../src/spec/targets/mos_sim_none.rs          |  2 +-
+ .../src/spec/targets/mos_supervision_none.rs  |  5 +++
+ .../src/spec/targets/mos_unknown_none.rs      |  2 +-
+ .../src/spec/targets/mos_vic20_none.rs        |  5 +++
+ src/bootstrap/src/core/sanity.rs              | 32 +++++++++++++++++++
+ 40 files changed, 236 insertions(+), 6 deletions(-)
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_apple2_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_c128_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_cpm65_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_cx16_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_dodo_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_eater_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_fds_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_mega65_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_neo6502_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_pce_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_pet_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_rp6502_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_rpc8e_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_supervision_none.rs
+ create mode 100644 compiler/rustc_target/src/spec/targets/mos_vic20_none.rs
+
+diff --git a/compiler/rustc_target/src/spec/base/mos.rs b/compiler/rustc_target/src/spec/base/mos.rs
+index 4c6f367189bea7612ef50b60685bc142f9b86eff..036df2801ae32cdb9a811f64a8d1f00fd0c8ef75 100644
+--- a/compiler/rustc_target/src/spec/base/mos.rs
++++ b/compiler/rustc_target/src/spec/base/mos.rs
+@@ -11,10 +11,16 @@
+ 
+ /// A MOS target linked with the SDK driver `linker`; `vendor` is the platform
+ /// name exposed as `target_vendor` (e.g. "sim", "c64"), "unknown" for none.
++/// `cpu` must match the platform's own `mos-<platform>-clang` default (its
++/// `clang.cfg`, inherited from its SDK `PARENT` platform when it sets none
++/// itself) - most platforms are plain `mos6502`; a few widen the ISA
++/// (`mosw65c02`/`mos65c02`/`mos45gs02`/`moshuc6280`/`mos65el02`) or restrict
++/// it to undocumented opcodes only (`mos6502x`, Atari 2600).
+ pub(crate) fn target(
+     vendor: &'static str,
+     linker: &'static str,
+     description: &'static str,
++    cpu: &'static str,
+ ) -> Target {
+     Target {
+         llvm_target: "mos-unknown-none".into(),
+@@ -30,7 +36,7 @@ pub(crate) fn target(
+         options: TargetOptions {
+             vendor: vendor.into(),
+             c_int_width: 16,
+-            cpu: "mos6502".into(),
++            cpu: cpu.into(),
+             linker: Some(linker.into()),
+             linker_flavor: LinkerFlavor::Gnu(Cc::Yes, Lld::No),
+             // The SDK driver adds crt0, libc and the platform linker script.
+diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
+index bdbc9ec2314d85005388a38bd896c0eeb14ae17a..4320d9cdb28819ba92b4fdaa1734f716880fe66d 100644
+--- a/compiler/rustc_target/src/spec/mod.rs
++++ b/compiler/rustc_target/src/spec/mod.rs
+@@ -1544,6 +1544,38 @@ fn $module() {
+     ("mos-c64-none", mos_c64_none),
+     ("mos-nes-nrom-none", mos_nes_nrom_none),
+     ("mos-atari8-dos-none", mos_atari8_dos_none),
++    ("mos-apple2-none", mos_apple2_none),
++    ("mos-atari2600-4k-none", mos_atari2600_4k_none),
++    ("mos-atari2600-3e-none", mos_atari2600_3e_none),
++    ("mos-atari5200-supercart-none", mos_atari5200_supercart_none),
++    ("mos-atari8-cart-std-none", mos_atari8_cart_std_none),
++    ("mos-atari8-cart-megacart-none", mos_atari8_cart_megacart_none),
++    ("mos-atari8-cart-xegs-none", mos_atari8_cart_xegs_none),
++    ("mos-lynx-bll-none", mos_lynx_bll_none),
++    ("mos-eater-none", mos_eater_none),
++    ("mos-cx16-none", mos_cx16_none),
++    ("mos-c128-none", mos_c128_none),
++    ("mos-pet-none", mos_pet_none),
++    ("mos-vic20-none", mos_vic20_none),
++    ("mos-cpm65-none", mos_cpm65_none),
++    ("mos-dodo-none", mos_dodo_none),
++    ("mos-geos-cbm-none", mos_geos_cbm_none),
++    ("mos-mega65-none", mos_mega65_none),
++    ("mos-nes-action53-none", mos_nes_action53_none),
++    ("mos-nes-cnrom-none", mos_nes_cnrom_none),
++    ("mos-nes-gtrom-none", mos_nes_gtrom_none),
++    ("mos-nes-mmc1-none", mos_nes_mmc1_none),
++    ("mos-nes-mmc3-none", mos_nes_mmc3_none),
++    ("mos-nes-unrom-none", mos_nes_unrom_none),
++    ("mos-nes-unrom-512-none", mos_nes_unrom_512_none),
++    ("mos-fds-none", mos_fds_none),
++    ("mos-osi-c1p-none", mos_osi_c1p_none),
++    ("mos-neo6502-none", mos_neo6502_none),
++    ("mos-rp6502-none", mos_rp6502_none),
++    ("mos-pce-none", mos_pce_none),
++    ("mos-pce-cd-none", mos_pce_cd_none),
++    ("mos-rpc8e-none", mos_rpc8e_none),
++    ("mos-supervision-none", mos_supervision_none),
+ 
+     ("aarch64_be-unknown-hermit", aarch64_be_unknown_hermit),
+     ("aarch64-unknown-hermit", aarch64_unknown_hermit),
+diff --git a/compiler/rustc_target/src/spec/targets/mos_apple2_none.rs b/compiler/rustc_target/src/spec/targets/mos_apple2_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a60508de32d28891b0edc1c133a058227869ad3c
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_apple2_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("apple2", "mos-apple2-clang", "MOS 6502, Apple II / IIe (ProDOS 8 SYS)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f3d32c89dab8432bab7bbfac58c981b3c64546e
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari2600_3e_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari2600-3e", "mos-atari2600-3e-clang", "MOS 6502X, Atari 2600 (TigerVision 3E)", "mos6502x")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7942edabc6b09c15d1ce8ec44335f2aa2712b7dd
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari2600_4k_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari2600-4k", "mos-atari2600-4k-clang", "MOS 6502X, Atari 2600 (4K)", "mos6502x")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f2fa122725cc8477f6d64e21018ea86d0b3c79a1
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari5200_supercart_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari5200-supercart", "mos-atari5200-supercart-clang", "MOS 6502, Atari 5200 (Super Cart)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..af414e331f0a2ea7c6b7771874a8934f192089fa
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_megacart_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari8-cart-megacart", "mos-atari8-cart-megacart-clang", "MOS 6502, Atari 8-bit (MegaCart cartridge)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2663c04ed83adc65984fb360b9583d1a60e63f46
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_std_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari8-cart-std", "mos-atari8-cart-std-clang", "MOS 6502, Atari 8-bit (standard cartridge)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..394823991e61fbc368b4540badccea795e142ae8
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_cart_xegs_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("atari8-cart-xegs", "mos-atari8-cart-xegs-clang", "MOS 6502, Atari 8-bit (XEGS cartridge)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs b/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+index 2fecc0fba6a58903477d6e548b30e3afcf111a58..63ff5718529001753ca579a142f97168c1a9c9aa 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_atari8_dos_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("atari8-dos", "mos-atari8-dos-clang", "MOS 6502, Atari 8-bit (DOS)")
++    base::mos::target("atari8-dos", "mos-atari8-dos-clang", "MOS 6502, Atari 8-bit (DOS)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_c128_none.rs b/compiler/rustc_target/src/spec/targets/mos_c128_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..78e5dc8b5d6e5af2b14b304a2731a01c84a3f67f
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_c128_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("c128", "mos-c128-clang", "MOS 8502, Commodore 128", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_c64_none.rs b/compiler/rustc_target/src/spec/targets/mos_c64_none.rs
+index dd3b4a6bffb5913da02a27b2b07e8979609b06a9..f81a7027343556e170bf08551436f0c23e6eb480 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_c64_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_c64_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("c64", "mos-c64-clang", "MOS 6510, Commodore 64")
++    base::mos::target("c64", "mos-c64-clang", "MOS 6510, Commodore 64", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_cpm65_none.rs b/compiler/rustc_target/src/spec/targets/mos_cpm65_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..40d4b6caaf52389ae923c3f4b8ce2183834563a2
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_cpm65_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("cpm65", "mos-cpm65-clang", "MOS 6502, CP/M-65", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_cx16_none.rs b/compiler/rustc_target/src/spec/targets/mos_cx16_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..04b1654168f1713c5c96c19794d9f9e85567dd65
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_cx16_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("cx16", "mos-cx16-clang", "MOS 65C02, Commander X16", "mosw65c02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_dodo_none.rs b/compiler/rustc_target/src/spec/targets/mos_dodo_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..60f8dcec900614e8e904d220c7e1c5429e41e7ef
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_dodo_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("dodo", "mos-dodo-clang", "MOS 6502, Dodo 6502 Game System", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_eater_none.rs b/compiler/rustc_target/src/spec/targets/mos_eater_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f54a1952f90a694725e7bd4a76feb088939d905e
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_eater_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("eater", "mos-eater-clang", "MOS 65C02, Ben Eater's breadboard 6502 computer", "mosw65c02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_fds_none.rs b/compiler/rustc_target/src/spec/targets/mos_fds_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8bd019e9af99f14ed2c9439f6cdfdfe45480f87a
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_fds_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("fds", "mos-fds-clang", "MOS 2A03, Family Computer Disk System", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs b/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a10e1ec7ef14e051133ed36dadfced280c1d807a
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_geos_cbm_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("geos-cbm", "mos-geos-cbm-clang", "MOS 6502, Commodore GEOS (64/128)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs b/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..e027d05870357e14b8dce05e18423c3f5bb900da
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_lynx_bll_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("lynx-bll", "mos-lynx-bll-clang", "MOS 65SC02, Atari Lynx (BLL executable)", "mos65c02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_mega65_none.rs b/compiler/rustc_target/src/spec/targets/mos_mega65_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a85358e720798eff5a2c56d17acb4031a5c1801
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_mega65_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("mega65", "mos-mega65-clang", "MOS 45GS02, MEGA65", "mos45gs02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_neo6502_none.rs b/compiler/rustc_target/src/spec/targets/mos_neo6502_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1d1b4796482468f140301dc53efe4bd963bb13f8
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_neo6502_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("neo6502", "mos-neo6502-clang", "MOS 65C02, OLIMEX Neo6502", "mosw65c02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f5cfa61c320e4e711759c776b9cee6e9d52d691
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_action53_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-action53", "mos-nes-action53-clang", "MOS 2A03, NES (Action 53 mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2f45c66501009db045fcfcf147091a946265e510
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_cnrom_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-cnrom", "mos-nes-cnrom-clang", "MOS 2A03, NES (CNROM mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad443566630d8f7784ba7ffe7c2e6325755a46a9
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_gtrom_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-gtrom", "mos-nes-gtrom-clang", "MOS 2A03, NES (GTROM mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..696c62c45a071c1aae7668711c3860b0604bd8aa
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_mmc1_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-mmc1", "mos-nes-mmc1-clang", "MOS 2A03, NES (MMC1 mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e3659291408714830d7ca546b405f8239237422
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_mmc3_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-mmc3", "mos-nes-mmc3-clang", "MOS 2A03, NES (MMC3 mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+index 2fc91980f7bb7a42ef3a33431326deef08ac35da..8549394d0b72e80610991a5d7ec06b03b82751ed 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_nrom_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("nes-nrom", "mos-nes-nrom-clang", "MOS 2A03, Nintendo Entertainment System (NROM)")
++    base::mos::target("nes-nrom", "mos-nes-nrom-clang", "MOS 2A03, Nintendo Entertainment System (NROM)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d0e35912a6dc935fe65ef0355747333873954097
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_512_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-unrom-512", "mos-nes-unrom-512-clang", "MOS 2A03, NES (UNROM-512 mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..04013ad849584b69d22544363bc4ee9d1e93b06b
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_nes_unrom_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("nes-unrom", "mos-nes-unrom-clang", "MOS 2A03, NES (UNROM mapper)", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs b/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c41db171f6ebc6252f24e6994ef32f78be2ddb8b
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_osi_c1p_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("osi-c1p", "mos-osi-c1p-clang", "MOS 6502, Ohio Scientific Challenger 1P", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs b/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..17e14e08d164c6c970ca0517c940dbbc1ab5edd8
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_pce_cd_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("pce-cd", "mos-pce-cd-clang", "Hudson HuC6280, PC Engine CD", "moshuc6280")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_pce_none.rs b/compiler/rustc_target/src/spec/targets/mos_pce_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6f2efc545ff9f4f11a6ceef45ec12cb9f0a9c469
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_pce_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("pce", "mos-pce-clang", "Hudson HuC6280, PC Engine / TurboGrafx-16", "moshuc6280")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_pet_none.rs b/compiler/rustc_target/src/spec/targets/mos_pet_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..4eeebe572d6cda9d83b180db97afeee72dd64ed6
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_pet_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("pet", "mos-pet-clang", "MOS 6502, Commodore PET", "mos6502")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_rp6502_none.rs b/compiler/rustc_target/src/spec/targets/mos_rp6502_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..8104efab6130ffeb580c7cc4bf704e91549ed38d
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_rp6502_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("rp6502", "mos-rp6502-clang", "MOS 65C02, Picocomputer 6502 (RP6502)", "mosw65c02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_rpc8e_none.rs b/compiler/rustc_target/src/spec/targets/mos_rpc8e_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9adca61193c9cdb632907e255fdcaa60f9fd6f51
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_rpc8e_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("rpc8e", "mos-rpc8e-clang", "MOS 65EL02, RPC/8e (RedPower 2)", "mos65el02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_sim_none.rs b/compiler/rustc_target/src/spec/targets/mos_sim_none.rs
+index 7d19ceab55b0e0f32f500bdcfec18187f3612e04..0887b700f0351bcec119089895889fd7612a921b 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_sim_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_sim_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("sim", "mos-sim-clang", "MOS 6502, llvm-mos simulator (mos-sim)")
++    base::mos::target("sim", "mos-sim-clang", "MOS 6502, llvm-mos simulator (mos-sim)", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_supervision_none.rs b/compiler/rustc_target/src/spec/targets/mos_supervision_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae89cce1ab3e6285808fd5a2682b8bdd3592f50b
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_supervision_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("supervision", "mos-supervision-clang", "MOS 65C02, Watara Supervision", "mos65c02")
++}
+diff --git a/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs b/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs
+index 6cbdc6132157b289acd0685e2bfd884ef5b8fe74..ce37f454fb9824b8f837bcec809935aa0b968d9a 100644
+--- a/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs
++++ b/compiler/rustc_target/src/spec/targets/mos_unknown_none.rs
+@@ -1,5 +1,5 @@
+ use crate::spec::{Target, base};
+ 
+ pub(crate) fn target() -> Target {
+-    base::mos::target("unknown", "mos-clang", "MOS 6502, no platform")
++    base::mos::target("unknown", "mos-clang", "MOS 6502, no platform", "mos6502")
+ }
+diff --git a/compiler/rustc_target/src/spec/targets/mos_vic20_none.rs b/compiler/rustc_target/src/spec/targets/mos_vic20_none.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..47a32b441eec9ddde14b39aaaabdd82b2d2233fa
+--- /dev/null
++++ b/compiler/rustc_target/src/spec/targets/mos_vic20_none.rs
+@@ -0,0 +1,5 @@
++use crate::spec::{Target, base};
++
++pub(crate) fn target() -> Target {
++    base::mos::target("vic20", "mos-vic20-clang", "MOS 6502, Commodore VIC-20", "mos6502")
++}
+diff --git a/src/bootstrap/src/core/sanity.rs b/src/bootstrap/src/core/sanity.rs
+index 54ba626a36cc15e8a18714ea5c9c424918094e74..f217777f1e0d14c984ab630457562c5ebbf65b10 100644
+--- a/src/bootstrap/src/core/sanity.rs
++++ b/src/bootstrap/src/core/sanity.rs
+@@ -36,6 +36,38 @@ pub struct Finder {
+     "mos-c64-none",
+     "mos-nes-nrom-none",
+     "mos-atari8-dos-none",
++    "mos-apple2-none",
++    "mos-atari2600-4k-none",
++    "mos-atari2600-3e-none",
++    "mos-atari5200-supercart-none",
++    "mos-atari8-cart-std-none",
++    "mos-atari8-cart-megacart-none",
++    "mos-atari8-cart-xegs-none",
++    "mos-lynx-bll-none",
++    "mos-eater-none",
++    "mos-cx16-none",
++    "mos-c128-none",
++    "mos-pet-none",
++    "mos-vic20-none",
++    "mos-cpm65-none",
++    "mos-dodo-none",
++    "mos-geos-cbm-none",
++    "mos-mega65-none",
++    "mos-nes-action53-none",
++    "mos-nes-cnrom-none",
++    "mos-nes-gtrom-none",
++    "mos-nes-mmc1-none",
++    "mos-nes-mmc3-none",
++    "mos-nes-unrom-none",
++    "mos-nes-unrom-512-none",
++    "mos-fds-none",
++    "mos-osi-c1p-none",
++    "mos-neo6502-none",
++    "mos-rp6502-none",
++    "mos-pce-none",
++    "mos-pce-cd-none",
++    "mos-rpc8e-none",
++    "mos-supervision-none",
+ ];
+ 
+ /// During sanity checks, we search for target tuples to determine if they exist in the compiler's

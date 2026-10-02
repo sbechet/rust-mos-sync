@@ -54,8 +54,9 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
     `watch.yml`. Fixed by comparing against a new authoritative
     `llvm_mos.patched_branch` field (the branch the patches actually target)
     instead - beta now correctly classifies as `llvm-bump`, not `sync-rust`.
-    Real fix is Phase 6 (`llvm-bump.yml`): extract a MOS patch against
-    23.1 and update `patched_branch`. Tracking issue:
+    Real fix is Phase 6 (`llvm-bump.yml`, `scripts/llvm-bump.sh`, 2026-10-01):
+    extract a MOS patch against 23.1 into `patches/llvm/23.1/` (patches are
+    now per LLVM version and `patched_branch` no longer exists). Tracking issue:
     https://github.com/sbechet/rust-mos-sync/issues/1 (opened by the failed
     run, before this fix - can be closed/left as a Phase 6 reminder).
     Phase 3's sync-rust.yml mechanics (detection, branch, versions.toml bump,
