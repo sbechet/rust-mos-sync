@@ -11,11 +11,14 @@ commits of the current toolchain.
 
 MOS targets are `#![no_std]`: they ship `core` and `alloc`, never `std`.
 
-Status: Phases 1-3 of [PLAN.md](PLAN.md) implemented (a built toolchain runs
-`tests/programs/hello` on `mos-sim`, with vanilla `cargo`; CI syncs and
-releases exist but have not yet run for a real new Rust release). The Docker
-image below is already built and published. See [docs/git-and-distribution.md](docs/git-and-distribution.md)
-for the full binary distribution plan.
+**Status (2026-10-02): in production.** Stable **Rust 1.99.0** and the current
+**beta** (1.100) are published as GitHub releases and `ghcr.io` images, built on
+LLVM 23.1 for 37 MOS platform targets, and a daily check follows upstream: a new
+Rust version is built, tested, merged and released by CI without intervention
+(see [PLAN.md](PLAN.md) §12 for what is built and what is not: syncing the llvm-mos
+backend and automatic conflict resolution are still manual). See
+[docs/git-and-distribution.md](docs/git-and-distribution.md) for how binaries are
+distributed.
 
 ## Using the Docker image
 
@@ -144,6 +147,25 @@ To list what the image supports:
 ```sh
 docker run --rm ghcr.io/sbechet/rust-mos:stable rustc --print target-list | grep ^mos-
 ```
+
+## Install without Docker
+
+Linux x86_64. Downloads the toolchain and the llvm-mos SDK it was built against
+(linkers, C runtime, `mos-sim`), verifies them, unpacks under
+`~/.local/share/rust-mos/` and, if `rustup` is installed, links it as a toolchain:
+
+```sh
+# latest stable
+curl -fsSL https://github.com/sbechet/rust-mos-sync/releases/latest/download/install-stable.sh | bash
+# the rolling beta preview
+curl -fsSL https://github.com/sbechet/rust-mos-sync/releases/download/beta/install-beta.sh | bash
+# one specific release (its installer installs that release)
+curl -fsSL https://github.com/sbechet/rust-mos-sync/releases/download/v1.99.0-mos.1/install-stable.sh | bash
+```
+
+Then `cargo +mos-stable build --release --target mos-c64-none` (add the SDK's
+`bin/`, printed by the installer, to `PATH`, or set the
+`CARGO_TARGET_*_LINKER` variables as the Docker image does).
 
 ## Building the toolchain from source
 

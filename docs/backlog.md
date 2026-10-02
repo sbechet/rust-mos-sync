@@ -37,7 +37,9 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
 
 ## Actions
 
--1. **Beta needs an LLVM bump before it can build at all.** Found by the
+-1. **Beta needs an LLVM bump before it can build at all. RESOLVED 2026-10-02**
+    (`patches/llvm/23.1/`, PR #7; beta and stable both ship on it now; the
+    original analysis follows, kept for the record). Found by the
     first real `sync-rust.yml` dispatch (channel=beta, 2026-09-30):
     `patches/llvm/` was extracted for `rustc/22.1-2026-05-19` only (stable's
     branch at the time); beta has been on `rustc/23.1-2026-07-22` since this
