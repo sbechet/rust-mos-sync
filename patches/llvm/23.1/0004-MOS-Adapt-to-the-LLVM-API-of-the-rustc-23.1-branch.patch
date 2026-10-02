@@ -11,8 +11,9 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
 - GlobalISel: G_CTLZ/CTTZ_ZERO_UNDEF became _ZERO_POISON, the legacy legalizer
   tables are gone (no computeTables), and LegalizerHelper::lowerMemcpyInline
   is folded into lowerMemCpyFamily (which handles G_MEMCPY_INLINE).
-- The legacy tables also made opcodes without type operands legal by default:
-  G_BR now needs an explicit alwaysLegal().
+- The legacy tables also made opcodes they had no rules for legal by default:
+  G_BR now needs an explicit alwaysLegal(), and G_FNEG/G_FMAD (lower) and
+  G_FPOWI/G_FLDEXP (libcall) are declared.
 - TargetMachine::getMCAsmInfo returns a reference, and
   MCStreamer::emitCodeAlignment takes the subtarget by reference.
 - MCAsmInfoELF has no default constructor: it takes the MCTargetOptions.
@@ -30,11 +31,11 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
  llvm/lib/Target/MOS/MOSCallingConv.cpp        |  1 +
  llvm/lib/Target/MOS/MOSCombine.td             | 35 ++++++++++++++++++-
  llvm/lib/Target/MOS/MOSInstrInfo.cpp          |  2 +-
- llvm/lib/Target/MOS/MOSLegalizerInfo.cpp      |  7 ++--
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp      | 15 ++++++--
  llvm/lib/Target/MOS/MOSTargetMachine.cpp      |  4 ---
  llvm/test/CodeGen/MOS/prologepilog-ir.mir     |  4 +--
  llvm/test/CodeGen/MOS/prologepilog.mir        |  2 +-
- 10 files changed, 48 insertions(+), 16 deletions(-)
+ 10 files changed, 56 insertions(+), 16 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -149,7 +150,7 @@ index 42a94c356e6769d816d7877162c94cef1e67beee..860ff03a3676c3857e2eaef5ea316def
    switch (MI.getOpcode()) {
    default: {
 diff --git a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
-index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..b5362fa0afb5918dcc6043d4f8255e8ef2443243 100644
+index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..1bb109825ed471e08c1a1a5e4dc1ccd70ec2a633 100644
 --- a/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
 +++ b/llvm/lib/Target/MOS/MOSLegalizerInfo.cpp
 @@ -255,7 +255,7 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
@@ -161,7 +162,22 @@ index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..b5362fa0afb5918dcc6043d4f8255e8e
        .lower();
  
    // Floating Point Operations
-@@ -357,6 +357,8 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+@@ -306,6 +306,14 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+ 
+   getActionDefinitionsBuilder(G_FABS).custom();
+ 
++  // No type-less default any more (LLVM <= 22's legacy tables made these
++  // legal and the selector then had no pattern for them): G_FNEG flips the
++  // sign bit through the integer type, G_FMAD is a multiply and an add.
++  getActionDefinitionsBuilder({G_FNEG, G_FMAD}).lower();
++  getActionDefinitionsBuilder({G_FPOWI, G_FLDEXP})
++      .libcallFor({{S32, S32}, {S64, S32}})
++      .unsupported();
++
+   getActionDefinitionsBuilder({G_FCOPYSIGN, G_IS_FPCLASS}).lower();
+ 
+   getActionDefinitionsBuilder(G_FCANONICALIZE).custom();
+@@ -357,6 +365,8 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
        .maxScalar(0, S8)
        .unsupported();
  
@@ -170,7 +186,7 @@ index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..b5362fa0afb5918dcc6043d4f8255e8e
    getActionDefinitionsBuilder(G_BRCOND).customFor({S1}).unsupported();
  
    getActionDefinitionsBuilder(G_BRINDIRECT).legalFor({P});
-@@ -384,7 +386,6 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
+@@ -384,7 +394,6 @@ MOSLegalizerInfo::MOSLegalizerInfo(const MOSSubtarget &STI) {
        .maxScalar(0, S8)
        .unsupported();
  
@@ -178,7 +194,7 @@ index 1909b0eb95df8ef03e1ce303639c23a7bb440c6e..b5362fa0afb5918dcc6043d4f8255e8e
    verify(*STI.getInstrInfo());
  }
  
-@@ -2000,7 +2001,7 @@ bool MOSLegalizerInfo::legalizeMemOp(LegalizerHelper &Helper,
+@@ -2000,7 +2009,7 @@ bool MOSLegalizerInfo::legalizeMemOp(LegalizerHelper &Helper,
  
    // Try lowering, keeping in mind the size limit.
    if (IsInline) {
