@@ -20,19 +20,21 @@ Subject: [PATCH] [MOS] Adapt to the LLVM API of the rustc/23.1 branch
 - The prologepilog pass is called prolog-epilog (two MIR tests' RUN lines).
 - all_combines gained select_zero_false (select c, x, 0 -> and c, freeze x),
   whose generated apply code builds an s1 G_AND without checking legality;
-  MOS has no such instruction, so the rule is disabled in MOSCombiner.
+  MOS has no such instruction, so MOSCombiner uses mos_all_combines, a copy
+  of all_combines without it (rules cannot be disabled by name in release
+  builds).
 ---
- llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp        | 4 ++--
- llvm/lib/Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp     | 3 ++-
- llvm/lib/Target/MOS/MCTargetDesc/MOSMCELFStreamer.cpp | 2 +-
- llvm/lib/Target/MOS/MOSCallingConv.cpp                | 1 +
- llvm/lib/Target/MOS/MOSCombiner.cpp                   | 5 +++++
- llvm/lib/Target/MOS/MOSInstrInfo.cpp                  | 2 +-
- llvm/lib/Target/MOS/MOSLegalizerInfo.cpp              | 7 ++++---
- llvm/lib/Target/MOS/MOSTargetMachine.cpp              | 4 ----
- llvm/test/CodeGen/MOS/prologepilog-ir.mir             | 4 ++--
- llvm/test/CodeGen/MOS/prologepilog.mir                | 2 +-
- 10 files changed, 19 insertions(+), 15 deletions(-)
+ .../lib/Target/MOS/AsmParser/MOSAsmParser.cpp |  4 +--
+ .../Target/MOS/MCTargetDesc/MOSMCAsmInfo.cpp  |  3 +-
+ .../MOS/MCTargetDesc/MOSMCELFStreamer.cpp     |  2 +-
+ llvm/lib/Target/MOS/MOSCallingConv.cpp        |  1 +
+ llvm/lib/Target/MOS/MOSCombine.td             | 35 ++++++++++++++++++-
+ llvm/lib/Target/MOS/MOSInstrInfo.cpp          |  2 +-
+ llvm/lib/Target/MOS/MOSLegalizerInfo.cpp      |  7 ++--
+ llvm/lib/Target/MOS/MOSTargetMachine.cpp      |  4 ---
+ llvm/test/CodeGen/MOS/prologepilog-ir.mir     |  4 +--
+ llvm/test/CodeGen/MOS/prologepilog.mir        |  2 +-
+ 10 files changed, 48 insertions(+), 16 deletions(-)
 
 diff --git a/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp b/llvm/lib/Target/MOS/AsmParser/MOSAsmParser.cpp
 index 198865959a009fbebb0f57fed6d0104b679b7dda..a1c3d102771f20f94fb1bc9c96a12974fbd4a45c 100644
@@ -86,22 +88,53 @@ index 993ce3787622a7be8edc654c0a3941f431ca782a..9b5546351485521bee0ebbd65c7462a4
  
 +#define GET_CALLING_CONV_IMPL
  #include "MOSGenCallingConv.inc"
-diff --git a/llvm/lib/Target/MOS/MOSCombiner.cpp b/llvm/lib/Target/MOS/MOSCombiner.cpp
-index bff8495ed6115bf69a61f97e9133e86453d38f99..7584dcf872810518a4ba747dd4769025b0a76254 100644
---- a/llvm/lib/Target/MOS/MOSCombiner.cpp
-+++ b/llvm/lib/Target/MOS/MOSCombiner.cpp
-@@ -753,6 +753,11 @@ void MOSCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
- MOSCombiner::MOSCombiner() : MachineFunctionPass(ID) {
-   initializeMOSCombinerPass(*PassRegistry::getPassRegistry());
+diff --git a/llvm/lib/Target/MOS/MOSCombine.td b/llvm/lib/Target/MOS/MOSCombine.td
+index 7a064aa3591a4f0fbbe8e0785a41eb0f5f0638d8..a0c46b2a7fb8aa06b19b7c14488a02711a869276 100644
+--- a/llvm/lib/Target/MOS/MOSCombine.td
++++ b/llvm/lib/Target/MOS/MOSCombine.td
+@@ -88,8 +88,41 @@ def mul_to_shift_and_add : GICombineRule<
+           [{ return matchMulToShiftAndAdd(*${root}, ${matchinfo}); }]),
+   (apply [{ Helper.applyBuildFnNoErase(*${root}, ${matchinfo}); }])>;
  
-+  // select c, x, 0 -> and c, (freeze x) was added to all_combines in LLVM 23.
-+  // Its generated apply code does not check legality, and MOS has no s1 G_AND
-+  // (it would be left unselectable after the legalizer).
-+  if (!RuleConfig.setRuleDisabled("select_zero_false"))
-+    report_fatal_error("select_zero_false is not a rule of this combiner");
-   if (!RuleConfig.parseCommandLineOption())
-     report_fatal_error("Invalid rule identifier");
- }
++// LLVM 23's all_combines minus select_zero_false (select c, x, 0 -> and c,
++// freeze x): its generated apply code builds an s1 G_AND without checking
++// legality, and MOS has no s1 G_AND (cannot select after the legalizer).
++// Names are those of all_combines in the rustc/23.1 branch's Combine.td.
++def mos_all_combines : GICombineGroup<[
++    integer_reassoc_combines, trivial_combines, vector_ops_combines,
++    freeze_combines, cast_combines, insert_vec_elt_combines,
++    extract_vec_elt_combines, combines_for_extload,
++    combine_extracted_vector_load, undef_combines, identity_combines,
++    phi_combines, simplify_add_to_sub, hoist_logic_op_with_same_opcode_hands,
++    shifts_too_big, reassocs, ptr_add_immed_chain, cmp_combines,
++    shl_ashr_to_sext_inreg, neg_and_one_to_sext_inreg, sext_inreg_of_load,
++    width_reduction_combines, select_combines, select_not,
++    known_bits_simplifications, trunc_shift, not_cmp_fold,
++    opt_brcond_by_inverting_cond, const_combines, xor_of_and_with_same_reg,
++    ptr_add_with_zero, shift_immed_chain, shift_of_shifted_logic_chain,
++    load_or_combine, div_rem_to_divrem, funnel_shift_combines,
++    bitreverse_shift, commute_shift, form_bitfield_extract,
++    constant_fold_binops, constant_fold_fma, constant_fold_cast_op,
++    constant_fold_unary_int_op, fabs_fneg_fold, mulh_combines,
++    redundant_neg_operands, and_or_disjoint_mask, fma_combines,
++    fold_binop_into_select, intrem_combines, intdiv_combines,
++    fdiv_repeated_divison, sub_add_reg, select_to_minmax, fsub_to_fneg,
++    commute_constant_to_rhs, match_ands, match_ors, or_and_xor_combines,
++    simplify_neg_minmax, combine_concat_vector, sext_trunc, zext_trunc,
++    prefer_sign_combines, shuffle_combines, combine_use_vector_truncate,
++    merge_combines, overflow_combines, truncsat_combines,
++    lshr_of_trunc_of_lshr, ctls_combines, add_shift, sub_one_from_sub,
++    binop_with_neg, sub_minus_one, sub_of_mul_const, max_min_combines,
++    avgfloor_u_match, avgfloor_s_match, avgceil_u_match, avgceil_s_match,
++    combine_or_of_and
++]>;
++
+ def MOSCombiner : GICombiner<"MOSCombinerImpl", [
+-  all_combines,
++  mos_all_combines,
+   fold_global_offset,
+   extract_low_bit,
+   uaddo_1,
 diff --git a/llvm/lib/Target/MOS/MOSInstrInfo.cpp b/llvm/lib/Target/MOS/MOSInstrInfo.cpp
 index 42a94c356e6769d816d7877162c94cef1e67beee..860ff03a3676c3857e2eaef5ea316def8ae5d1bd 100644
 --- a/llvm/lib/Target/MOS/MOSInstrInfo.cpp
