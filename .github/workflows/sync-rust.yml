@@ -161,6 +161,17 @@ jobs:
       - name: Push branch and open the PR
         if: steps.detect.outputs.todo == 'sync-rust' && steps.apply_rust.outcome == 'success'
         run: |
+          # A sync takes an hour; main may have moved meanwhile. GITHUB_TOKEN
+          # cannot push a branch that differs from main in .github/workflows
+          # (run #2: a workflow change merged mid-sync made the push fail with
+          # "refusing to allow a GitHub App to create or update workflow"),
+          # so build the branch on main as it is now.
+          git fetch -q origin main
+          git rebase origin/main || {
+              git rebase --abort
+              echo "main moved during the sync and the commits no longer rebase cleanly" >&2
+              exit 1
+          }
           git push -q -u origin "$BRANCH"
           {
             echo "Automated sync: rust.$CHANNEL -> ${{ steps.detect.outputs.ref }}"
