@@ -241,7 +241,7 @@ The packaging logic itself was proven in CI before being factored out into
 `dist.sh` ([run 36631014475](https://github.com/sbechet/rust-mos-sync/actions/runs/36631014475));
 the refactor should be a no-op but has not been independently re-verified yet.
 
-**Phase 3 — CI for Rust syncs and releases. Implemented 2026-09-30, pending real-world validation.**
+**Phase 3 — CI for Rust syncs and releases. ✅ In production since 2026-10-02.**
 `watch.yml`, `sync-rust.yml`, `release.yml` (including the Docker image), `github.sh`.
 *Done when:* a new Rust point release produces a PR and, after merge, a published toolchain without intervention (Claude Code not yet enabled).
 First real dispatch of `sync-rust.yml` (channel=beta, 2026-09-30) exercised
@@ -290,26 +290,36 @@ for beta - then calls `docker-image.yml` to push the matching `ghcr.io`
 image tagged `<channel>`, `sha-<commit>` and the version tag. A build
 failure opens/updates a `release-failure-<channel>` tracking issue via
 `github.sh` (label needs creating like the others below).
-Not yet exercised for real: needs an actual `versions.toml` change to reach
-`main`, which depends on the still-pending real stable-tag test noted
-above. The channel-diff logic itself was unit-tested standalone (three
-cases: one channel changed, no change, manual override) before being
-committed.
+**Validated for real (2026-10-02).** `watch.yml` (with the
+`WORKFLOW_DISPATCH_TOKEN` secret now set) dispatched `sync-rust.yml` for beta by
+itself; it built, tested, opened PR #14, `github-actions[bot]` merged it and
+dispatched `release.yml`, which published the rolling `beta` pre-release and
+image. The first stable release, `v1.99.0-mos.1` (Rust 1.99.0 on LLVM 23.1),
+went out through `release.yml` too, triggered by merging the PR that added
+`patches/rust/1.99/` by hand (stable moved to a new LLVM branch, which needs
+its Rust patch series first). Setup steps 1 and 2 above are done.
+Lessons that changed the workflows: a sync takes about an hour, so a workflow
+change merged to `main` meanwhile made its push fail (`GITHUB_TOKEN` cannot push
+a branch that differs from `main` in `.github/workflows`) - `sync-rust.yml` now
+rebases on `main` before pushing; and the installer, never run before, failed on
+the published release (see the checksum fix, PR #15).
+`release.yml` also has a *historic* mode (`versions_ref`, 2026-10-02) to
+re-publish an old state of `versions.toml` (e.g. stable 1.98.1) without moving
+the `stable`/`<X.Y>` image tags or GitHub's "latest".
+Still open in this phase: the stable path through `sync-rust.yml` itself (no new
+stable tag since 1.99.0), and the 7-day beta soak before stable (PLAN §10; moved
+to Phase 7: each channel is synced and released independently for now).
 
-Everything in this phase now exists: `watch.yml`, `sync-rust.yml`,
-`release.yml`, `docker-image.yml`, `github.sh`. What remains is real-world
-validation once a genuine new stable Rust tag lands upstream.
-
-**Phase 4 — MOS backend sync.**
+**Phase 4 — MOS backend sync. Not started** (31 new llvm-mos commits pending as of 2026-10-02).
 `sync-mos-backend.yml` with deferral logic.
 
-**Phase 5 — Claude Code conflict resolution.**
+**Phase 5 — Claude Code conflict resolution. Not started.** Conflicts that scripts cannot resolve open an issue; the LLVM 23.1 and Rust 1.99/1.100 series were resolved by hand.
 Headless invocation, guardrails, prompts in `ci/claude/`, reports in PRs. Test it by replaying a past conflict.
 
-**Phase 6 — LLVM bumps. Implemented 2026-10-01, pending a real run.**
+**Phase 6 — LLVM bumps. Done by hand 2026-10-02, workflow not yet run by itself.** The LLVM 23.1 series (beta, then stable) was produced with `scripts/llvm-bump.sh` and fixed by hand to build, pass tier 1 and ship in two releases; `llvm-bump.yml` itself has not been dispatched yet, so the *Done when* ("a simulated bump completes end to end") is not formally met.
 `llvm-bump.yml`, driven from beta. One MOS patch series per LLVM version (`patches/llvm/<NN.N>/`, with the llvm-mos merge it was extracted from in `BASE_MERGE`) so stable can stay on the old LLVM while beta's bump is prepared: each channel uses the series of its own `llvm_branch`, `detect.sh` reports `llvm-bump` when a branch has none, `llvm_mos.patched_branch` is gone. `scripts/llvm-bump.sh <channel>` extracts the patch (clang/lld/compiler-rt left out: we build LLVM only), applies it, resolves upstream-drift conflicts in other targets/non-MOS tests to the Rust side, and exits 2 on real ones (resolve in `work/llvm-project`, then `--continue`). **Known gap (2026-10-02):** two `CodeGen/MOS` lit tests (`legalizer.mir`, `shift-rotate.ll`) fail on 23.1 on instruction order in their CHECK lines (same instructions, different order after LLVM 23's changes). They are listed in `patches/llvm/23.1/KNOWN_LIT_FAILURES`, which `test.sh` tier 1 reports as WARN instead of failing, until the generated code is verified on a working example (the maintainer's call: end-to-end `hello` on `mos-sim`, then either fix the CHECKs or prove the output equivalent, then delete the file). Any other failing lit test still fails the tier. `patches/rust/` got the same layout (`<X.Y>/`, the version read from the checkout's `src/version`): beta's Rust 1.100 needed its own series (different `STAGE0_MISSING_TARGETS`, a `va_arg.rs` arm, and bootstrap pins `cc` 1.2.62 where stable pins 1.2.28, so the vendored `cc` of patch 0003 differs per version); `patches/rust/1.98/` is stable's. A new minor with no series yet fails `apply.sh` with exit 2 (copy the nearest series and resolve). The 23.1 series (beta) was produced this way, with 7 hand-resolved conflicts and a port of the MOS `llvm-readobj`/`MOSFlags` code to 23's `EnumStrings` API. *Done when:* a simulated bump (previous → current Rust LLVM branch) completes end to end.
 
-**Phase 7 — Distribution polish.**
+**Phase 7 — Distribution polish.** Done so far: readable image tags and labels, pinned installers, historic re-publish. Open:
 Beta→stable promotion, rustup manifests, additional hosts.
 
 ## 13. Conventions for Claude Code
