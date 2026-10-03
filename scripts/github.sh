@@ -16,10 +16,12 @@
 #       branch. For PRs whose tests already passed in the job that opened
 #       them (PLAN.md §10: rust-only syncs auto-merge when every tier passes).
 #   issue-open <label> <title> <body-file>
-#       Opens a new tracking issue with <label>, or comments on the one
-#       already open with it instead of duplicating (PLAN.md §10: "a single
-#       issue per channel"). The label must already exist on the repo.
-#       Prints the issue URL.
+#       Opens a new tracking issue with <label>, or updates the body and
+#       comments on the one already open with it instead of duplicating
+#       (PLAN.md §10: "a single issue per channel"). The body is always
+#       kept current so the issue never goes stale across re-runs; the
+#       comment is the changelog of what was pending at each run. The
+#       label must already exist on the repo. Prints the issue URL.
 #   issue-close <label> [<comment>]
 #       Closes every open issue with <label> (there should be at most one),
 #       with an optional closing comment - called on the next successful
@@ -55,8 +57,9 @@ case "$cmd" in
         body_file="${3:?body file required}"
         existing=$(gh issue list --label "$label" --state open --json url --jq '.[0].url // empty')
         if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title" --body-file "$body_file" >/dev/null
             gh issue comment "$existing" --body-file "$body_file" >/dev/null
-            log "commented on existing issue: $existing"
+            log "updated and commented on existing issue: $existing"
             echo "$existing"
         else
             gh issue create --label "$label" --title "$title" --body-file "$body_file"
