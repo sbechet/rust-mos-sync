@@ -6,9 +6,14 @@
 # itself, not on the method used) - only a personal access token can. If the
 # maintainer adds a fine-grained PAT with this repo's Actions:Read and write
 # permission as the repo secret WORKFLOW_DISPATCH_TOKEN, this workflow
-# dispatches sync-rust.yml automatically. Without it, it still runs and is
-# still useful: it opens/updates a single tracking issue listing what's
-# pending, for the maintainer to run sync-rust.yml manually.
+# dispatches sync-rust.yml automatically; without it, a `sync-rust` line
+# falls back to the tracking issue below like every other kind.
+#
+# Only `sync-rust` lines are ever auto-dispatched (and only with the token).
+# `llvm-bump` always needs human approval (PLAN.md §7.4/§10) and
+# `sync-mos-backend` has no workflow yet (Phase 4): both are reported in a
+# single tracking issue for the maintainer, token or not, so nothing goes
+# unreported just because sync-rust automation is turned on.
 name: watch
 
 on:
@@ -51,22 +56,42 @@ jobs:
             gh workflow run sync-rust.yml -f "channel=$channel"
           done < /tmp/actions.txt
 
-      - name: Track what's pending (no dispatch token configured)
-        if: steps.detect.outputs.found == 'true' && env.HAVE_PAT != 'true'
+      # A `sync-rust` line is handled above once a dispatch token exists, so
+      # it no longer belongs in the tracking issue. `llvm-bump` always needs
+      # human approval (PLAN.md §7.4/§10 - never auto-dispatched, token or
+      # not) and `sync-mos-backend` has no workflow yet (Phase 4): both must
+      # keep surfacing here regardless of HAVE_PAT, or they silently stop
+      # being reported the day a token is added.
+      - name: What's left for a human
+        id: pending
+        run: |
+          awk -v have_pat="$HAVE_PAT" \
+              '!(have_pat == "true" && $2 == "sync-rust")' /tmp/actions.txt \
+              > /tmp/pending.txt
+          echo "any=$([ -s /tmp/pending.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Track what's pending for a human
+        if: steps.pending.outputs.any == 'true'
         run: |
           {
             echo "detect.sh found the following pending as of $(date -u +%F):"
             echo
             echo '```'
-            cat /tmp/actions.txt
+            cat /tmp/pending.txt
             echo '```'
             echo
-            echo "No \`WORKFLOW_DISPATCH_TOKEN\` repo secret is configured, so this"
-            echo "wasn't dispatched automatically - run the relevant workflow by hand"
-            echo "(\`sync-rust.yml\` for a \`sync-rust\` line; the others aren't built yet)."
+            echo "\`llvm-bump\` always needs human approval (PLAN.md §7.4/§10) -"
+            echo "run \`llvm-bump.yml\` by hand. \`sync-mos-backend\` has no"
+            echo "workflow yet (Phase 4) - informational only."
+            if [ "$HAVE_PAT" != true ]; then
+              echo
+              echo "No \`WORKFLOW_DISPATCH_TOKEN\` repo secret is configured, so a"
+              echo "\`sync-rust\` line above wasn't dispatched automatically either -"
+              echo "run \`sync-rust.yml\` by hand for it."
+            fi
           } > /tmp/issue.md
           scripts/github.sh issue-open watch-pending "Pending upstream syncs" /tmp/issue.md
 
-      - name: Nothing pending, close the tracking issue if any
-        if: steps.detect.outputs.found == 'false'
+      - name: Nothing left pending, close the tracking issue if any
+        if: steps.pending.outputs.any == 'false'
         run: scripts/github.sh issue-close watch-pending "Nothing pending anymore."
