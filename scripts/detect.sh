@@ -94,7 +94,7 @@ fi
 last_synced=$(ver_get llvm_mos.last_synced)
 if [ "$rust_only" = 0 ] && [ -n "$last_synced" ]; then
     mos_probe="$WORK/detect-llvm-mos-probe"
-    if [ ! -d "$mos_probe/.git" ]; then
+    if [ ! -d "$mos_probe" ]; then
         git init -q --bare "$mos_probe"
         git -C "$mos_probe" remote add origin "$LLVM_MOS_URL"
     fi
