@@ -191,11 +191,16 @@ tier_smoke() {
 [profile.release]
 panic = "abort"
 EOF
-    if (cd "$d/smoke" && "$CARGO" build -q --release --target "$sim_target") >"$WORK/smoke.log" 2>&1 \
-       && [ "$(mos-sim "$d/smoke/target/$sim_target/release/smoke")" = "Hello, world!" ]; then
-        pass "smoke: vanilla cargo ($("$CARGO" --version)) builds and runs a fresh crate"
-    else
+    # Not -q: the log must show the linker_messages warnings, if any.
+    if ! (cd "$d/smoke" && "$CARGO" build --release --target "$sim_target") >"$WORK/smoke.log" 2>&1 \
+       || [ "$(mos-sim "$d/smoke/target/$sim_target/release/smoke")" != "Hello, world!" ]; then
         fail "smoke: see $WORK/smoke.log"
+    elif grep -q "linker stderr" "$WORK/smoke.log"; then
+        # The SDK driver and lld are silent on a clean link (rust patches
+        # "no -no-pie for MOS", "link MOS rlibs without their raw metadata").
+        fail "smoke: the link printed warnings, see $WORK/smoke.log"
+    else
+        pass "smoke: vanilla cargo ($("$CARGO" --version)) builds and runs a fresh crate, link silent"
     fi
 }
 
