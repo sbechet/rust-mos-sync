@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Fri, 9 Oct 2026 16:28:15 +0000
+Subject: [PATCH] codegen_ssa: no -no-pie for MOS
+
+The llvm-mos SDK's Clang drivers (mos-<platform>-clang) do not use
+-no-pie and warn on every link: "argument unused during compilation:
+'-no-pie'", which the linker_messages lint then reports for every
+program. MOS executables are static and position dependent anyway.
+---
+ compiler/rustc_codegen_ssa/src/back/linker.rs | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/compiler/rustc_codegen_ssa/src/back/linker.rs b/compiler/rustc_codegen_ssa/src/back/linker.rs
+index 4c99da5049e8225541887be03e4d645e9843ba1a..64240dee665ab32de07a46c41280362ad68b6026 100644
+--- a/compiler/rustc_codegen_ssa/src/back/linker.rs
++++ b/compiler/rustc_codegen_ssa/src/back/linker.rs
+@@ -518,7 +518,12 @@ fn set_output_kind(
+         match output_kind {
+             LinkOutputKind::DynamicNoPicExe => {
+                 // noop on windows w/ gcc, warning w/ clang
+-                if !self.is_ld && self.is_gnu && !self.sess.target.is_like_windows {
++                if !self.is_ld
++                    && self.is_gnu
++                    && !self.sess.target.is_like_windows
++                    // the llvm-mos SDK's drivers warn it is unused, every link
++                    && self.sess.target.arch != Arch::Mos
++                {
+                     self.cc_arg("-no-pie");
+                 }
+             }
+@@ -533,7 +538,12 @@ fn set_output_kind(
+                 // `-static` works for both gcc wrapper and ld.
+                 self.link_or_cc_arg("-static");
+                 // noop on windows w/ gcc, warning w/ clang
+-                if !self.is_ld && self.is_gnu && !self.sess.target.is_like_windows {
++                if !self.is_ld
++                    && self.is_gnu
++                    && !self.sess.target.is_like_windows
++                    // the llvm-mos SDK's drivers warn it is unused, every link
++                    && self.sess.target.arch != Arch::Mos
++                {
+                     self.cc_arg("-no-pie");
+                 }
+             }
