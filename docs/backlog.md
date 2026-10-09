@@ -135,13 +135,20 @@ repositories (2026-09-27), checked against Rust 1.98.1 and our patches.
 
 ## Cosmetic
 
-- Linking any MOS binary prints (to stderr, non-fatal):
-  `ld.lld: ...libcompiler_builtins-*.rlib: archive member 'lib.rmeta'
-  ('lib.rmeta-link') is neither ET_REL nor LLVM bitcode`. lld inspects every
-  member of the `.rlib` archive under `-flto` and complains about the two
-  that hold only Rust metadata, not object code or bitcode; harmless (the
-  link still succeeds), just noisy. Silence if it turns out to bother users,
-  otherwise leave it - not worth a patch on its own.
+- **Done (2026-10-09), linker noise.** Linking any MOS binary printed a
+  `linker_messages` warning (rustc 1.98, 1.99): `mos-<platform>-clang:
+  argument unused during compilation: '-no-pie'` and `ld.lld:
+  ...libcompiler_builtins-*.rlib: archive member 'lib.rmeta'
+  ('lib.rmeta-link') is neither ET_REL nor LLVM bitcode`. The first:
+  rustc adds `-no-pie` for every non-PIC executable linked through a
+  gcc-like driver, and the SDK drivers ignore it (patch 0009 leaves it out
+  on MOS). The second: the `object` crate has no MOS architecture, so
+  rustc cannot wrap the metadata in an ELF object as on other targets, and
+  the crates LTO ignores (`compiler_builtins`) reach lld as they are, raw
+  metadata members included (patch 0010 rebuilds them without, as rustc
+  already does for every other crate). Checked by relinking satori by
+  hand: silent, same binary. `test.sh`'s smoke tier now fails on any
+  `linker stderr` warning.
 - `llvm-size`/`llvm-readelf` from the SDK refuse every `mos-sim` binary
   ("not recognized as a valid object file"), Rust or plain C alike (checked
   with a trivial `int main(void) { return 0; }` compiled by `mos-sim-clang`).
