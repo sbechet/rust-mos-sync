@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: rust-mos-sync <rust-mos-sync@localhost>
+Date: Fri, 9 Oct 2026 16:28:33 +0000
+Subject: [PATCH] codegen_ssa: link MOS rlibs without their raw metadata
+ members
+
+The `object` crate has no MOS architecture, so create_wrapper_file
+leaves lib.rmeta (and lib.rmeta-link) as raw archive members instead of
+an ELF object with an SHF_EXCLUDE section. Crates linked as they are,
+the ones LTO ignores (compiler_builtins), then make ld.lld warn on every
+link: "archive member 'lib.rmeta' is neither ET_REL nor LLVM bitcode".
+On MOS, rebuild them without those members, as add_static_crate
+already does for every other crate: their object files are kept
+(#![no_builtins]), the linked program is the same.
+---
+ compiler/rustc_codegen_ssa/src/back/link.rs | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/compiler/rustc_codegen_ssa/src/back/link.rs b/compiler/rustc_codegen_ssa/src/back/link.rs
+index 221998abf61286ec5dbd89e65f3634ad08ea346b..7da76ce999b953b5ddddec0090c86a6eecfbc3bf 100644
+--- a/compiler/rustc_codegen_ssa/src/back/link.rs
++++ b/compiler/rustc_codegen_ssa/src/back/link.rs
+@@ -3743,7 +3743,14 @@ fn add_static_crate(
+     let mut link_upstream =
+         |path: &Path| cmd.link_staticlib_by_path(&rehome_lib_path(sess, path), false);
+ 
+-    if !are_upstream_rust_objects_already_included(sess) || ignored_for_lto(sess, crate_info, cnum)
++    // On MOS the `object` crate cannot wrap the metadata in an object file
++    // (`create_wrapper_file`), so `lib.rmeta` is a raw member of the rlib,
++    // which lld warns about ("neither ET_REL nor LLVM bitcode") for every
++    // crate linked as is: `compiler_builtins`. Rebuild those without it too.
++    let raw_metadata = sess.target.arch == Arch::Mos;
++    if (!are_upstream_rust_objects_already_included(sess)
++        || ignored_for_lto(sess, crate_info, cnum))
++        && !raw_metadata
+     {
+         link_upstream(cratepath);
+         return;
