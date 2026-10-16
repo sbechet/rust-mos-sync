@@ -102,7 +102,7 @@ index 8d99035fd0db40c13d6e43ce1332904217ffe317..89f438426d6a7748f258d4b31e71af6b
      }
  }
 diff --git a/compiler/rustc_target/src/callconv/mod.rs b/compiler/rustc_target/src/callconv/mod.rs
-index a06a6a0a69e12b8a774f9990995b4ceecac85720..37e195f604ea71fec44ac7e38ae92e0f42d585c9 100644
+index 2a10921f99578df47c4aea6d5582c7c5b9f3bde4..f1026e96b53ebb09e2c7d04a1564fb9a20bb2089 100644
 --- a/compiler/rustc_target/src/callconv/mod.rs
 +++ b/compiler/rustc_target/src/callconv/mod.rs
 @@ -19,6 +19,7 @@
@@ -113,7 +113,7 @@ index a06a6a0a69e12b8a774f9990995b4ceecac85720..37e195f604ea71fec44ac7e38ae92e0f
  mod mips;
  mod mips64;
  mod msp430;
-@@ -702,6 +703,7 @@ pub fn adjust_for_foreign_abi<C>(&mut self, cx: &C, abi: ExternAbi)
+@@ -704,6 +705,7 @@ pub fn adjust_for_foreign_abi<C>(&mut self, cx: &C, abi: ExternAbi)
              Arch::Avr => avr::compute_abi_info(cx, self),
              Arch::LoongArch32 | Arch::LoongArch64 => loongarch::compute_abi_info(cx, self),
              Arch::M68k => m68k::compute_abi_info(cx, self),
