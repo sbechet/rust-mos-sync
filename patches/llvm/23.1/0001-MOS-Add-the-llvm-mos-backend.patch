@@ -2037,7 +2037,7 @@ index 6fdd603092fc6b32ab479d444944e013cb5ba274..a804e4d112bbb0cb8e689c9e92bc20ef
  
    /// The integer bit size to use for SjLj based exception handling.
 diff --git a/llvm/include/llvm/TargetParser/Triple.h b/llvm/include/llvm/TargetParser/Triple.h
-index d819c4975b13e5190611b78c8e37cb95e5ebde19..c0b9e8de2c7c71dfc3f8b48fdecea834b46ae3c4 100644
+index c5af232523c695764e369a29ec85e875e9ab1696..816dfa22447af1b43b8df14404170226fb99278c 100644
 --- a/llvm/include/llvm/TargetParser/Triple.h
 +++ b/llvm/include/llvm/TargetParser/Triple.h
 @@ -68,6 +68,7 @@ public:
@@ -2048,7 +2048,7 @@ index d819c4975b13e5190611b78c8e37cb95e5ebde19..c0b9e8de2c7c71dfc3f8b48fdecea834
      msp430,      // MSP430: msp430
      ppc,         // PPC: powerpc
      ppcle,       // PPCLE: powerpc (little endian)
-@@ -1230,6 +1231,11 @@ public:
+@@ -1237,6 +1238,11 @@ public:
      return Env == Triple::GNUX32 || Env == Triple::MuslX32;
    }
  
@@ -2110,7 +2110,7 @@ index dbdd420b776f22c317397688f9b9011ed1fce06d..b8024e2491b9878099d374ef74d6b524
        }
      }
 diff --git a/llvm/lib/Analysis/GlobalsModRef.cpp b/llvm/lib/Analysis/GlobalsModRef.cpp
-index 1a0ae25b2b6b389f4044a76c11da1ea3afa29341..401b0d7750407512bf38e5bb06eecb8c769c9a4e 100644
+index 6471cc0d52cbd85bf7680801d39e5153d4454374..f2ed1539601e7ed8a7354522cd2aaf63680a5d3f 100644
 --- a/llvm/lib/Analysis/GlobalsModRef.cpp
 +++ b/llvm/lib/Analysis/GlobalsModRef.cpp
 @@ -22,6 +22,7 @@
@@ -2121,7 +2121,7 @@ index 1a0ae25b2b6b389f4044a76c11da1ea3afa29341..401b0d7750407512bf38e5bb06eecb8c
  #include "llvm/IR/InstIterator.h"
  #include "llvm/IR/Instructions.h"
  #include "llvm/IR/Module.h"
-@@ -598,8 +599,12 @@ void GlobalsAAResult::AnalyzeCallGraph(CallGraph &CG, Module &M) {
+@@ -599,8 +600,12 @@ void GlobalsAAResult::AnalyzeCallGraph(CallGraph &CG, Module &M) {
  
          // We handle calls specially because the graph-relevant aspects are
          // handled above.
@@ -2223,7 +2223,7 @@ index 73f7f5e6cba04aaaacdb6781bd8cf3c04c89228c..5483efe7014759198205b3caa53fdc00
        IndirectCallParams.DefaultThreshold =
            InlineConstants::IndirectCallThreshold;
 diff --git a/llvm/lib/Analysis/ScalarEvolution.cpp b/llvm/lib/Analysis/ScalarEvolution.cpp
-index ab8e73f514cd2ac4bebbde323963b4c07c46280a..f3dac89bfa7e2cb56edabd1b13ec4f63442672df 100644
+index 3b805d3ec5b8a1ee80efe3b4169ac1ccb9408675..7fbd71abdc39f0552584cf9f40b767e85930fb6f 100644
 --- a/llvm/lib/Analysis/ScalarEvolution.cpp
 +++ b/llvm/lib/Analysis/ScalarEvolution.cpp
 @@ -57,6 +57,7 @@
@@ -2234,7 +2234,7 @@ index ab8e73f514cd2ac4bebbde323963b4c07c46280a..f3dac89bfa7e2cb56edabd1b13ec4f63
  #include "llvm/Analysis/ScalarEvolution.h"
  #include "llvm/ADT/APInt.h"
  #include "llvm/ADT/ArrayRef.h"
-@@ -10144,7 +10145,13 @@ const SCEV *ScalarEvolution::computeExitCountExhaustively(const Loop *L,
+@@ -10149,7 +10150,13 @@ const SCEV *ScalarEvolution::computeExitCountExhaustively(const Loop *L,
  
      if (CondVal->getValue() == uint64_t(ExitWhen)) {
        ++NumBruteForceTripCountsComputed;
@@ -4270,7 +4270,7 @@ index 0d742e34b4b22abb7c6151551ac309f2b56cd836..ee434b04415159c15a0d9038c61ffeb9
    }
  
 diff --git a/llvm/lib/Passes/PassBuilderPipelines.cpp b/llvm/lib/Passes/PassBuilderPipelines.cpp
-index d62828c78bfe44550347a5b427bebb14bc3713e2..7b3daeabc9aa85dd04c2e537d0c482bfd0434250 100644
+index 5de45e5668fb92fa2df37ddfa1bc8ac851ef4dd5..fa7d11d04f71df463639573a07955b01e6d4e1e2 100644
 --- a/llvm/lib/Passes/PassBuilderPipelines.cpp
 +++ b/llvm/lib/Passes/PassBuilderPipelines.cpp
 @@ -2308,6 +2308,8 @@ PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
@@ -4296,10 +4296,10 @@ index b31104aac65517524d68b669ef26848044a54dd4..ef325c1dde370dde094bb20b37277dd7
      // value of 1 << 14. A value of 5 will choose to spill or split really
      // cold path instead of using a callee-saved register.
 diff --git a/llvm/lib/Target/AArch64/AArch64TargetTransformInfo.cpp b/llvm/lib/Target/AArch64/AArch64TargetTransformInfo.cpp
-index 209bd30de9ff9b21ba5a0166a91bb13f7040a68d..ade9e9f8f41a9fa49ed659606908b97253b0fc83 100644
+index 66af547fc279d5cf62750f0bd8dd6a83d78a5bac..030c85e3e220b888950605aae067aead981bef05 100644
 --- a/llvm/lib/Target/AArch64/AArch64TargetTransformInfo.cpp
 +++ b/llvm/lib/Target/AArch64/AArch64TargetTransformInfo.cpp
-@@ -6965,10 +6965,9 @@ bool AArch64TTIImpl::preferTailFoldingOverEpilogue(TailFoldingInfo *TFI) const {
+@@ -6975,10 +6975,9 @@ bool AArch64TTIImpl::preferTailFoldingOverEpilogue(TailFoldingInfo *TFI) const {
    return NumInsns >= SVETailFoldInsnThreshold;
  }
  
@@ -30537,10 +30537,10 @@ index bf91c53270067f85681d6119d083aeb60537fcfd..ced5562296ec28582028bc66b27595bc
      MRI = &MF.getRegInfo();
    }
 diff --git a/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp b/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp
-index bbd1738cd511719ffe260c23d3e6c938ec6b8d58..e98e31f831af20874d05beb988c767541d4ba35f 100644
+index 8eb20927fb8a088627d48b81ddaf415ffa7da72c..5f682325af35739bf5bb653c16012c83b69c68f6 100644
 --- a/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp
 +++ b/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp
-@@ -2629,6 +2629,8 @@ bool RISCVFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
+@@ -2634,6 +2634,8 @@ bool RISCVFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
    case TargetStackID::SGPRSpill:
    case TargetStackID::WasmLocal:
    case TargetStackID::ScalablePredicateVector:
@@ -30678,7 +30678,7 @@ index 18f0c13907e52db48fca08f65cf54f1f49b46a20..4457b7f163838cb2489f5d9064ffe86f
      return "e-m:e-p:16:16-i32:16-i64:16-f32:16-f64:16-a:8-n8:16-S16";
    case Triple::ppc:
 diff --git a/llvm/lib/TargetParser/Triple.cpp b/llvm/lib/TargetParser/Triple.cpp
-index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec4449d0ec76 100644
+index 2e4fe7ce70887e38e54239a9f2c6f10bd1873efe..8e1129b1a102cd0f9f5497fe3ab4d011a7b54a4b 100644
 --- a/llvm/lib/TargetParser/Triple.cpp
 +++ b/llvm/lib/TargetParser/Triple.cpp
 @@ -92,6 +92,8 @@ StringRef Triple::getArchTypeName(ArchType Kind) {
@@ -30690,7 +30690,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case msp430:
      return "msp430";
    case nvptx64:
-@@ -410,6 +412,9 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
+@@ -412,6 +414,9 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
    case loongarch64:
      return "loongarch";
  
@@ -30700,7 +30700,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case dxil:
      return "dx";
  
-@@ -565,6 +570,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
+@@ -567,6 +572,7 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
        .Case("csky", csky)
        .Case("loongarch32", loongarch32)
        .Case("loongarch64", loongarch64)
@@ -30708,7 +30708,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
        .Case("dxil", dxil)
        .Case("xtensa", xtensa)
        .Default(UnknownArch);
-@@ -663,6 +669,7 @@ Triple::ArchType Triple::parseArch(StringRef ArchName) {
+@@ -666,6 +672,7 @@ Triple::ArchType Triple::parseArch(StringRef ArchName) {
            .Case("thumbeb", Triple::thumbeb)
            .Case("avr", Triple::avr)
            .Case("m68k", Triple::m68k)
@@ -30716,7 +30716,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
            .Case("msp430", Triple::msp430)
            .Cases({"mips", "mipseb", "mipsallegrex", "mipsisa32r6", "mipsr6"},
                   Triple::mips)
-@@ -1021,6 +1028,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
+@@ -1026,6 +1033,7 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
    case Triple::mips64:
    case Triple::mips64el:
    case Triple::mips:
@@ -30724,7 +30724,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case Triple::msp430:
    case Triple::nvptx64:
    case Triple::nvptx:
-@@ -1774,6 +1782,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
+@@ -1779,6 +1787,7 @@ unsigned Triple::getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
      return 0;
  
    case llvm::Triple::avr:
@@ -30732,7 +30732,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case llvm::Triple::msp430:
      return 16;
  
-@@ -1882,6 +1891,7 @@ Triple Triple::get32BitArchVariant() const {
+@@ -1887,6 +1896,7 @@ Triple Triple::get32BitArchVariant() const {
    case Triple::avr:
    case Triple::bpfeb:
    case Triple::bpfel:
@@ -30740,7 +30740,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case Triple::msp430:
    case Triple::systemz:
    case Triple::ve:
-@@ -2000,6 +2010,7 @@ Triple Triple::get64BitArchVariant() const {
+@@ -2005,6 +2015,7 @@ Triple Triple::get64BitArchVariant() const {
    case Triple::kalimba:
    case Triple::lanai:
    case Triple::m68k:
@@ -30748,7 +30748,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case Triple::msp430:
    case Triple::r600:
    case Triple::shave:
-@@ -2126,6 +2137,7 @@ Triple Triple::getBigEndianArchVariant() const {
+@@ -2131,6 +2142,7 @@ Triple Triple::getBigEndianArchVariant() const {
    case Triple::kalimba:
    case Triple::loongarch32:
    case Triple::loongarch64:
@@ -30756,7 +30756,7 @@ index 356782c1f6ad49fa75ea774c96865ea401cec0b8..d88fad94c036689766d328060c6eec44
    case Triple::msp430:
    case Triple::nvptx64:
    case Triple::nvptx:
-@@ -2266,6 +2278,7 @@ bool Triple::isLittleEndian() const {
+@@ -2271,6 +2283,7 @@ bool Triple::isLittleEndian() const {
    case Triple::loongarch64:
    case Triple::mips64el:
    case Triple::mipsel:
