@@ -9,9 +9,9 @@ llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
 [rust.beta]
 # rust-lang/rust has no beta tags: beta is tracked by the `beta` branch head.
 tag = "1.100.0-beta"
-commit = "8ea38001b9da1d6683ac5ebbc993cac89d3a09df"
+commit = "9bb056d65144235b662c48ad94a64301e4af80d0"
 llvm_branch = "rustc/23.1-2026-07-22"
-llvm_commit = "aab11ee0ea5ea9a1d462ad0bc1fae9d9bb643019"
+llvm_commit = "915c669d232e4cad467ba95ff041041e2e7c3f69"
 
 [llvm_mos]
 base_merge = "cdfebee3c9da537c00e74a650aa8fa5201a97c6f"   # upstream parent ecd2b6862c31
