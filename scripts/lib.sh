@@ -144,6 +144,51 @@ llvm_version_of_branch() {
     printf '%s\n' "${b%%-*}"
 }
 
+# llvm_cmake_configure <src> <build> <prefix>
+# Configures (cmake only, no build) LLVM+MOS in <build> from <src>/llvm,
+# installing to <prefix>. A no-op if <build> is already configured for that
+# exact prefix (ninja's own build.ninja.d rule still reconfigures on a
+# CMakeLists.txt change, e.g. a new MOS source file, so this is only about
+# not re-running cmake itself needlessly) - but a *different* prefix (a new
+# build-llvm.sh cache key after sync-mos-backend.sh's loop changed the
+# series) must reconfigure, or `ninja install` would silently install into
+# the stale one. Callers (build-llvm.sh, sync-mos-backend.sh's per-commit
+# rebuild loop) can call it unconditionally. Shares every flag with
+# build-llvm.sh's own configure step so a key computed there still describes
+# the result.
+llvm_cmake_configure() {
+    local src="$1" build="$2" prefix="$3"
+    if [ -f "$build/build.ninja" ] \
+        && grep -qFx "CMAKE_INSTALL_PREFIX:PATH=$prefix" "$build/CMakeCache.txt" 2>/dev/null; then
+        return 0
+    fi
+    need cmake
+    local targets="X86"
+    case "$(uname -m)" in aarch64|arm64) targets="X86;AArch64" ;; esac
+    local cc=cc cxx=c++ linker_flags=() launcher=()
+    if command -v clang >/dev/null && command -v clang++ >/dev/null; then cc=clang; cxx=clang++; fi
+    command -v ld.lld >/dev/null && linker_flags=(-DLLVM_USE_LINKER=lld)
+    if command -v sccache >/dev/null; then launcher=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
+    elif command -v ccache >/dev/null; then launcher=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache); fi
+    log "configuring LLVM ($build, targets $targets;MOS, projects '${LLVM_PROJECTS-}')"
+    cmake -S "$src/llvm" -B "$build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$prefix" \
+        -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx" \
+        "${linker_flags[@]}" "${launcher[@]}" \
+        -DLLVM_TARGETS_TO_BUILD="$targets" \
+        -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=MOS \
+        -DLLVM_ENABLE_PROJECTS="${LLVM_PROJECTS-}" \
+        -DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON \
+        -DLLVM_INSTALL_UTILS=ON -DLLVM_INCLUDE_TESTS=ON \
+        -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF \
+        -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_ENABLE_ZLIB=ON -DLLVM_ENABLE_ZSTD=OFF \
+        -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_BINDINGS=OFF \
+        -DLLVM_PARALLEL_COMPILE_JOBS="$JOBS" -DLLVM_PARALLEL_LINK_JOBS="${LINK_JOBS:-1}" \
+        -DLLVM_VERSION_SUFFIX="-rust-mos" \
+        >"$WORK/llvm-cmake.log" 2>&1 || { tail -40 "$WORK/llvm-cmake.log" >&2; die "cmake failed"; }
+}
+
 # Host triple as rustc names it.
 host_triple() {
     case "$(uname -s)-$(uname -m)" in
