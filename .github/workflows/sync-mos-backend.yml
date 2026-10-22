@@ -1,0 +1,208 @@
+# PLAN.md §7.3 (Phase 4): brings patches/llvm/<NN.N>/ up to date with new
+# llvm-mos commits via scripts/sync-mos-backend.sh (cherry-pick-or-defer, no
+# Claude Code, never blocks), then proves the result with the full test
+# suite and auto-merges, same policy as sync-rust.yml (PLAN.md §10: "MOS
+# backend syncs: auto-merge if all test tiers pass"). Manual for now
+# (workflow_dispatch); watch.yml dispatches it automatically once
+# WORKFLOW_DISPATCH_TOKEN exists, same as sync-rust.yml.
+name: sync-mos-backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Rust channel whose LLVM branch to sync against llvm-mos"
+        type: choice
+        options: [stable, beta]
+        default: stable
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write   # dispatch release.yml after the auto-merge
+
+concurrency:
+  group: sync-mos-backend-${{ inputs.channel }}
+  cancel-in-progress: false
+
+env:
+  CHANNEL: ${{ inputs.channel }}
+  STAGE: "1"
+  GH_TOKEN: ${{ github.token }}
+  FAIL_LABEL: sync-mos-backend-failure-${{ inputs.channel }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: .github/free-disk.sh
+
+      - name: Install build tools
+        run: sudo apt-get update -q && sudo apt-get install -yq ninja-build lld ccache pkg-config libssl-dev
+
+      - name: git identity for the commits this workflow makes
+        run: |
+          git config user.name "rust-mos-sync[bot]"
+          git config user.email "rust-mos-sync-bot@users.noreply.github.com"
+
+      - name: Fetch and patch LLVM
+        run: |
+          scripts/fetch.sh llvm "$CHANNEL"
+          scripts/apply.sh llvm "base-$CHANNEL"
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ccache-llvm-
+
+      - name: Cherry-pick or defer new llvm-mos commits
+        id: sync
+        env:
+          LINK_JOBS: "2"
+          CCACHE_MAXSIZE: 3G
+        run: |
+          before=$(git -C work/llvm-project rev-parse mos)
+          rc=0
+          scripts/sync-mos-backend.sh "$CHANNEL" || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          [ "$rc" = 0 ] || exit "$rc"
+          if [ "$(git -C work/llvm-project rev-parse mos)" = "$before" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Nothing applied, close the tracking issue if any and stop
+        if: steps.sync.outputs.changed == 'false'
+        run: |
+          echo "nothing new applied cleanly for $CHANNEL (see work/sync-mos-backend-report.md for what was deferred, if anything)."
+          scripts/github.sh issue-close "$FAIL_LABEL" "Nothing to sync this run."
+
+      - name: Regenerate the patch series and commit it
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          . scripts/lib.sh
+          BRANCH="sync-mos-backend/$(llvm_version_of_branch "$(ver_get "rust.$CHANNEL.llvm_branch")")-$(date -u +%Y%m%d)"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          scripts/regen-patches.sh llvm "base-$CHANNEL"
+          git checkout -q -b "$BRANCH"
+          git add patches versions.toml
+          git commit -q -m "llvm: sync the MOS backend with upstream llvm-mos ($CHANNEL)"
+
+      - name: Build LLVM (full)
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          LLVM_KEEP_GOING: "1"
+          LINK_JOBS: "2"
+        run: scripts/build-llvm.sh "$CHANNEL"
+
+      - name: Test tier 1 (llvm-lit MOS)
+        if: steps.sync.outputs.changed == 'true'
+        run: scripts/test.sh llvm
+
+      - name: Publish the LLVM to the llvm-cache release
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          scripts/build-llvm.sh --package "$CHANNEL"
+          key=$(scripts/build-llvm.sh --key "$CHANNEL")
+          gh release view llvm-cache >/dev/null 2>&1 || gh release create llvm-cache \
+            --prerelease --title "LLVM build cache" \
+            --notes "Patched LLVM installs keyed by scripts/build-llvm.sh --key. Not for end users."
+          gh release upload llvm-cache "work/llvm-$key-x86_64-unknown-linux-gnu.tar.xz" --clobber
+
+      - name: Fetch and patch Rust
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          scripts/fetch.sh rust "$CHANNEL"
+          scripts/apply.sh rust "base-$CHANNEL"
+
+      - name: Build rustc and the MOS libraries
+        if: steps.sync.outputs.changed == 'true'
+        run: scripts/build-rust.sh "$CHANNEL"
+
+      - name: Test tiers 2-5
+        if: steps.sync.outputs.changed == 'true'
+        run: scripts/test.sh std run size smoke
+
+      - name: Package toolchain
+        if: steps.sync.outputs.changed == 'true'
+        run: scripts/dist.sh "$CHANNEL"
+
+      - name: Push branch and open the PR
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          git fetch -q origin main
+          git rebase origin/main || {
+              git rebase --abort
+              echo "main moved during the sync and the commits no longer rebase cleanly" >&2
+              exit 1
+          }
+          git push -q -u origin "$BRANCH"
+          {
+            echo "Automated MOS backend sync for $CHANNEL."
+            echo
+            cat work/sync-mos-backend-report.md
+            echo
+            echo "### Test report"
+            echo '```'; cat work/test-report.txt; echo '```'
+          } > /tmp/pr-body.md
+          scripts/github.sh pr-open "$BRANCH" \
+            "llvm: sync MOS backend ($CHANNEL)" /tmp/pr-body.md
+          scripts/github.sh issue-close "$FAIL_LABEL" "Fixed by $BRANCH."
+
+      # PLAN.md §10: a MOS backend sync auto-merges once every test tier
+      # passed - same reasoning and GITHUB_TOKEN caveat as sync-rust.yml.
+      - name: Merge the PR and release
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          scripts/github.sh pr-merge "$BRANCH"
+          gh workflow run release.yml --ref main -f channel="$CHANNEL"
+
+      - name: Diagnose failed lit tests (llc -print-after-all)
+        if: failure()
+        run: scripts/lit-diag.sh
+
+      - name: Errors as annotations
+        if: failure()
+        run: .github/annotate-errors.sh work/sync-mos-backend-build.log work/sync-mos-backend-test.log work/llvm-cmake.log work/llvm-build.log work/rust-build.log work/test-programs.log work/smoke.log work/test-report.txt
+
+      - name: Report an unexpected failure
+        if: failure()
+        run: |
+          {
+            echo "See the [failed run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for logs."
+            echo
+            if [ -f work/sync-mos-backend-report.md ]; then
+              echo "### What scripts/sync-mos-backend.sh applied or deferred before the failure"
+              echo
+              cat work/sync-mos-backend-report.md
+            fi
+          } > /tmp/issue.md
+          scripts/github.sh issue-open "$FAIL_LABEL" "sync-mos-backend failed on $CHANNEL" /tmp/issue.md
+
+      - name: Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-mos-backend-${{ env.CHANNEL }}-logs
+          path: |
+            work/*.log
+            work/sync-mos-backend-report.md
+            work/test-report.txt
+          if-no-files-found: ignore

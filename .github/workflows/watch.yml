@@ -6,14 +6,14 @@
 # itself, not on the method used) - only a personal access token can. If the
 # maintainer adds a fine-grained PAT with this repo's Actions:Read and write
 # permission as the repo secret WORKFLOW_DISPATCH_TOKEN, this workflow
-# dispatches sync-rust.yml automatically; without it, a `sync-rust` line
-# falls back to the tracking issue below like every other kind.
+# dispatches sync-rust.yml and sync-mos-backend.yml automatically; without
+# it, a `sync-rust`/`sync-mos-backend` line falls back to the tracking issue
+# below like every other kind.
 #
-# Only `sync-rust` lines are ever auto-dispatched (and only with the token).
-# `llvm-bump` always needs human approval (PLAN.md §7.4/§10) and
-# `sync-mos-backend` has no workflow yet (Phase 4): both are reported in a
-# single tracking issue for the maintainer, token or not, so nothing goes
-# unreported just because sync-rust automation is turned on.
+# `sync-rust` and `sync-mos-backend` lines are auto-dispatched (both need the
+# token; PLAN.md §10 auto-merges both if tests pass). `llvm-bump` always
+# needs human approval (PLAN.md §7.4/§10 - never auto-dispatched, token or
+# not) and is always reported in the tracking issue below.
 name: watch
 
 on:
@@ -45,29 +45,42 @@ jobs:
           scripts/detect.sh | tee /tmp/actions.txt
           echo "found=$([ -s /tmp/actions.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch sync-rust.yml automatically
+      - name: Dispatch sync-rust.yml and sync-mos-backend.yml automatically
         if: steps.detect.outputs.found == 'true' && env.HAVE_PAT == 'true'
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
         run: |
           while read -r _ kind channel _rest; do
-            [ "$kind" = "sync-rust" ] || continue
-            echo "dispatching sync-rust.yml for $channel"
-            gh workflow run sync-rust.yml -f "channel=$channel"
+            case "$kind" in
+                sync-rust)
+                    echo "dispatching sync-rust.yml for $channel"
+                    gh workflow run sync-rust.yml -f "channel=$channel"
+                    ;;
+                sync-mos-backend)
+                    # llvm_mos.last_synced/deferred are global (PLAN.md §5),
+                    # not per Rust channel - detect.sh's third field here is
+                    # the llvm-mos branch ("main"), not a channel. Pick
+                    # stable (sync-mos-backend.yml's own default): if stable
+                    # and beta ever sit on different LLVM branches, the
+                    # maintainer dispatches it for beta by hand too.
+                    echo "dispatching sync-mos-backend.yml for stable"
+                    gh workflow run sync-mos-backend.yml -f "channel=stable"
+                    ;;
+            esac
           done < /tmp/actions.txt
 
-      # A `sync-rust` line is handled above once a dispatch token exists, so
-      # it no longer belongs in the tracking issue. `llvm-bump` always needs
-      # human approval (PLAN.md §7.4/§10 - never auto-dispatched, token or
-      # not) and `sync-mos-backend` has no workflow yet (Phase 4): both must
-      # keep surfacing here regardless of HAVE_PAT, or they silently stop
-      # being reported the day a token is added.
+      # `sync-rust`/`sync-mos-backend` lines are handled above once a
+      # dispatch token exists, so they no longer belong in the tracking
+      # issue. `llvm-bump` always needs human approval (PLAN.md §7.4/§10 -
+      # never auto-dispatched, token or not) and must keep surfacing here
+      # regardless of HAVE_PAT, or it would silently stop being reported the
+      # day a token is added.
       - name: What's left for a human
         id: pending
         run: |
           awk -v have_pat="$HAVE_PAT" \
-              '!(have_pat == "true" && $2 == "sync-rust")' /tmp/actions.txt \
-              > /tmp/pending.txt
+              '!(have_pat == "true" && ($2 == "sync-rust" || $2 == "sync-mos-backend"))' \
+              /tmp/actions.txt > /tmp/pending.txt
           echo "any=$([ -s /tmp/pending.txt ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Track what's pending for a human
