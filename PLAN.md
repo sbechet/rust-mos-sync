@@ -310,8 +310,54 @@ Still open in this phase: the stable path through `sync-rust.yml` itself (no new
 stable tag since 1.99.0), and the 7-day beta soak before stable (PLAN §10; moved
 to Phase 7: each channel is synced and released independently for now).
 
-**Phase 4 — MOS backend sync. Not started** (31 new llvm-mos commits pending as of 2026-10-02).
-`sync-mos-backend.yml` with deferral logic.
+**Phase 4 — MOS backend sync. Implemented 2026-10-22, not yet run for real** (42
+new llvm-mos commits pending as of 2026-10-22, up from 31 on 2026-10-02 - watch's
+daily tracking issue #4 only ever reported the growing count, since
+`sync-mos-backend.yml` did not exist yet to act on it).
+`scripts/sync-mos-backend.sh` lists new llvm-mos commits touching MOS paths
+since `llvm_mos.last_synced`, plus everything still in `llvm_mos.deferred`
+from a previous run (retried every time, like `llvm-bump.sh` §7.4 step 5 -
+not in the original §7.3 text, but deferring forever without ever retrying
+would make the mechanism a one-way ratchet). A "Merge from upstream LLVM"
+commit (llvm-mos periodically merges in further upstream LLVM commits; 8 of
+the 42 are these) is never cherry-picked whole - that would drag in
+unrelated history going back tens of thousands of commits, the exact trap
+`extract-mos-patch.sh` already avoids for the big version-to-version bump.
+Only its diff against its first parent, restricted to the MOS paths, is
+applied. A regular commit (34 of the 42) is applied whole, non-MOS files and
+all: a handful do touch shared LLVM core files (`MIRParser`, `LiveVariables`,
+`llvm-mc`) alongside `llvm/lib/Target/MOS` - trimming to MOS-only risks an
+incomplete port of the feature, not a safer one, and `patches/llvm/*/0001`
+already works the same way. Each application is tried with `git apply
+--check -3`/`git am -3`; one that doesn't apply, breaks the incremental LLVM
+build, or breaks a MOS lit test is reverted and deferred, never involving
+Claude Code and never blocking the rest of the list (PLAN.md §7.3). The
+per-commit incremental build reuses `$WORK/llvm-build` via a new
+`build-llvm.sh --configure` mode (added alongside this; factored the cmake
+invocation into `lib.sh`'s `llvm_cmake_configure` so both share it) rather
+than `build-llvm.sh`'s normal cache-keyed path, which asserts the work tree
+is exactly base + the committed series - true only after `regen-patches.sh`
+re-exports the result, i.e. once per `sync-mos-backend.yml` run, not once
+per candidate commit.
+`sync-mos-backend.yml` mirrors `sync-rust.yml`'s structure and auto-merge
+policy (PLAN.md §10: "MOS backend syncs: auto-merge if all test tiers
+pass") - fetch/apply, the script above, `regen-patches.sh`, the full build
+and all 5 test tiers, PR, auto-merge, `release.yml` dispatch. `watch.yml`
+now dispatches it like `sync-rust.yml` when `WORKFLOW_DISPATCH_TOKEN` is
+set (`detect.sh`'s `sync-mos-backend` line has no channel - `llvm_mos.*` is
+global, not per-channel - so it dispatches for `stable`; if stable and beta
+ever diverge onto different LLVM branches, the maintainer runs it for beta
+by hand too). The `sync-mos-backend-failure-stable`/`-beta` labels this
+needs were created on the repo (the one-time step Phase 3 already
+documents for the other workflows).
+*Not done when this was written:* a real run. Locally replaying the 42
+candidates' plain-text patches against `work/llvm-project`'s `mos` branch
+(outside the script, `git apply --check -3`/`git am -3` only, no build) hit
+real conflicts as early as the 1st and 13th candidates, confirming the
+deferred-commit mechanism is not theoretical - but the sandbox this was
+written in has 2 cores and no verified incremental-LLVM-build timing, so
+the build/lit side of the loop is unverified; the first real signal is a
+`workflow_dispatch` of `sync-mos-backend.yml`.
 
 **Phase 5 — Claude Code conflict resolution. Not started.** Conflicts that scripts cannot resolve open an issue; the LLVM 23.1 and Rust 1.99/1.100 series were resolved by hand.
 Headless invocation, guardrails, prompts in `ci/claude/`, reports in PRs. Test it by replaying a past conflict.

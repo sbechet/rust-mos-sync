@@ -8,9 +8,14 @@
 #   2. download of llvm-<key>-<host>.tar.xz from $LLVM_CACHE_URL (the
 #      `llvm-cache` release of the GitHub repository);
 #   3. build of $WORK/llvm-project (branch `mos`, see apply.sh).
-# --key      only print the key.
-# --package  write $WORK/llvm-<key>-<host>.tar.xz from the local install and
-#            print its path (for upload to the llvm-cache release).
+# --key       only print the key.
+# --package   write $WORK/llvm-<key>-<host>.tar.xz from the local install and
+#             print its path (for upload to the llvm-cache release).
+# --configure cmake-configure $WORK/llvm-build (a no-op if already configured)
+#             without building or checking the base+series invariant, and
+#             print its path. For sync-mos-backend.sh's per-commit rebuild
+#             loop (PLAN.md §7.3), which runs `mos` ahead of the series on
+#             purpose while it tries new llvm-mos commits.
 #
 # Environment:
 #   LLVM_PROJECTS    default "" (clang and lld come from the llvm-mos SDK)
@@ -21,7 +26,11 @@
 need python3 sha256sum
 
 mode=build
-case "${1:-}" in --key) mode=key; shift ;; --package) mode=package; shift ;; esac
+case "${1:-}" in
+    --key) mode=key; shift ;;
+    --package) mode=package; shift ;;
+    --configure) mode=configure; shift ;;
+esac
 channel="${1:-stable}"
 src="$WORK/llvm-project"
 build="$WORK/llvm-build"
@@ -53,6 +62,14 @@ case "$mode" in
         mv "$WORK/$asset.tmp" "$WORK/$asset"
         log "packaged $WORK/$asset ($(du -h "$WORK/$asset" | cut -f1))"
         echo "$WORK/$asset"; exit 0 ;;
+    configure)
+        # Before the cache-hit/download shortcuts below: those only ever
+        # produce an installed prefix, never the $build tree with a
+        # build.ninja this mode exists to guarantee.
+        need git cmake
+        [ -d "$src/.git" ] || die "$src missing; run fetch.sh llvm and apply.sh llvm first"
+        llvm_cmake_configure "$src" "$build" "$prefix"
+        echo "$build"; exit 0 ;;
 esac
 
 if [ -f "$prefix/.complete" ]; then
@@ -86,30 +103,8 @@ want=$(find "$series_dir" -maxdepth 1 -name '*.patch' | wc -l)
 [ "$head_patches" = "$want" ] || die "llvm work tree is not base + ${series_dir#$ROOT/} ($head_patches vs $want commits); run apply.sh llvm"
 git -C "$src" diff --quiet HEAD || die "llvm work tree has uncommitted changes"
 
-cc=cc; cxx=c++; linker_flags=()
-if command -v clang >/dev/null && command -v clang++ >/dev/null; then cc=clang; cxx=clang++; fi
-command -v ld.lld >/dev/null && linker_flags=(-DLLVM_USE_LINKER=lld)
-launcher=()
-if command -v sccache >/dev/null; then launcher=(-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache)
-elif command -v ccache >/dev/null; then launcher=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache); fi
-
 log "configuring LLVM (key $key, targets $targets;$experimental, projects '${projects}')"
-cmake -S "$src/llvm" -B "$build" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$prefix" \
-    -DCMAKE_C_COMPILER="$cc" -DCMAKE_CXX_COMPILER="$cxx" \
-    "${linker_flags[@]}" "${launcher[@]}" \
-    -DLLVM_TARGETS_TO_BUILD="$targets" \
-    -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$experimental" \
-    -DLLVM_ENABLE_PROJECTS="$projects" \
-    -DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON \
-    -DLLVM_INSTALL_UTILS=ON -DLLVM_INCLUDE_TESTS=ON \
-    -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_DOCS=OFF \
-    -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_ENABLE_ZLIB=ON -DLLVM_ENABLE_ZSTD=OFF \
-    -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_BINDINGS=OFF \
-    -DLLVM_PARALLEL_COMPILE_JOBS="$JOBS" -DLLVM_PARALLEL_LINK_JOBS="$LINK_JOBS" \
-    -DLLVM_VERSION_SUFFIX="-rust-mos" \
-    >"$WORK/llvm-cmake.log" 2>&1 || { tail -40 "$WORK/llvm-cmake.log" >&2; die "cmake failed"; }
+llvm_cmake_configure "$src" "$build" "$prefix"
 
 log "building LLVM with $JOBS jobs (log: $WORK/llvm-build.log)"
 keep_going=()
