@@ -17,10 +17,10 @@ already does for every other crate: their object files are kept
  1 file changed, 8 insertions(+), 1 deletion(-)
 
 diff --git a/compiler/rustc_codegen_ssa/src/back/link.rs b/compiler/rustc_codegen_ssa/src/back/link.rs
-index 221998abf61286ec5dbd89e65f3634ad08ea346b..7da76ce999b953b5ddddec0090c86a6eecfbc3bf 100644
+index a9c9df94af4062c8ac672372efeaccb9caf8b6da..7f9970d3b22cf191ab1d8f012b46d947c6041a65 100644
 --- a/compiler/rustc_codegen_ssa/src/back/link.rs
 +++ b/compiler/rustc_codegen_ssa/src/back/link.rs
-@@ -3743,7 +3743,14 @@ fn add_static_crate(
+@@ -3751,7 +3751,14 @@ fn add_static_crate(
      let mut link_upstream =
          |path: &Path| cmd.link_staticlib_by_path(&rehome_lib_path(sess, path), false);
  

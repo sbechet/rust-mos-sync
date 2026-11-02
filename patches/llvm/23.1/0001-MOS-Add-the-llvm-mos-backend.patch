@@ -2922,7 +2922,7 @@ index c750f643e99e25daf03f2a6942dd8610e66fa2ef..5c431ee09ac760d56ce998d027bdf272
    // An optimization remark emitter. Used to report failures.
    MachineOptimizationRemarkEmitter MORE(MF, /*MBFI=*/nullptr);
 diff --git a/llvm/lib/CodeGen/GlobalISel/LegalizerHelper.cpp b/llvm/lib/CodeGen/GlobalISel/LegalizerHelper.cpp
-index 94d43578ed9899fb26a3bbe45dd22a237f02e1c6..e2ed97e28fdbbfb8359e25053cc4c9b7b5952b86 100644
+index 6db3a4076990db29e20ef8650686592a6e07cd60..d6896d7536d72e7ea9c4b7352dffc162d523c75f 100644
 --- a/llvm/lib/CodeGen/GlobalISel/LegalizerHelper.cpp
 +++ b/llvm/lib/CodeGen/GlobalISel/LegalizerHelper.cpp
 @@ -12,6 +12,7 @@
@@ -2983,7 +2983,7 @@ index 94d43578ed9899fb26a3bbe45dd22a237f02e1c6..e2ed97e28fdbbfb8359e25053cc4c9b7
    case TargetOpcode::G_CTLZ_ZERO_POISON: {
      LLT LLTy = MRI.getType(MI.getOperand(0).getReg());
      unsigned Size = LLTy.getSizeInBits();
-@@ -8254,7 +8277,9 @@ LegalizerHelper::LegalizeResult LegalizerHelper::lowerRotate(MachineInstr &MI) {
+@@ -8263,7 +8286,9 @@ LegalizerHelper::LegalizeResult LegalizerHelper::lowerRotate(MachineInstr &MI) {
  
    // If a rotate in the other direction is supported, use it.
    unsigned RevRot = IsLeft ? TargetOpcode::G_ROTR : TargetOpcode::G_ROTL;
@@ -31886,10 +31886,10 @@ index ca6ae94a9a8d9351995c7993cb42117e7789f9bc..40e8e0fed38bb3f99570092f71f8cb52
    // predecessor branch is predictable, we may not want to merge them.
    uint64_t PTWeight, PFWeight;
 diff --git a/llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp b/llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp
-index b167fabdcf3baf79d58367e8ac23f50c8d30d925..a6b8c5c66b0d50868f21b9903924c813f15335d9 100644
+index 0ea3c3ff10b56c4ce113518d687265205216d852..34972cb8db17f8ff8cf2c7d0bd1375c74cfb167b 100644
 --- a/llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp
 +++ b/llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp
-@@ -4473,9 +4473,11 @@ Value *FortifiedLibCallSimplifier::optimizeStrpCpyChk(CallInst *CI,
+@@ -4474,9 +4474,11 @@ Value *FortifiedLibCallSimplifier::optimizeStrpCpyChk(CallInst *CI,
    Type *SizeTTy = IntegerType::get(CI->getContext(), SizeTBits);
    Value *LenV = ConstantInt::get(SizeTTy, Len);
    Value *Ret = emitMemCpyChk(Dst, Src, LenV, ObjSize, B, DL, TLI);
