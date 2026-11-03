@@ -2488,10 +2488,10 @@ index d336e60b4099147c4a8741f6392efd527b6a8cc8..4cd4aeb5ce585ce8c745d1ec01ff6a11
      else
        DwarfExpr.addMachineRegExpression(
 diff --git a/llvm/lib/CodeGen/CodeGenPrepare.cpp b/llvm/lib/CodeGen/CodeGenPrepare.cpp
-index 9d3f18c8fce6386bc71cf875ea00b6a3d0680520..87968ae8b65c1dcde336035019dcbd32d5d0a443 100644
+index 149de8fcb748c611bd7f2ccce4d42f98ecd2bc89..1c7f48fa4de57815e42edb39cf128d2475b708d9 100644
 --- a/llvm/lib/CodeGen/CodeGenPrepare.cpp
 +++ b/llvm/lib/CodeGen/CodeGenPrepare.cpp
-@@ -7598,6 +7598,9 @@ static bool isFormingBranchFromSelectProfitable(const TargetTransformInfo *TTI,
+@@ -7604,6 +7604,9 @@ static bool isFormingBranchFromSelectProfitable(const TargetTransformInfo *TTI,
    // FIXME: This should use the same heuristics as IfConversion to determine
    // whether a select is better represented as a branch.
  
@@ -30537,10 +30537,10 @@ index bf91c53270067f85681d6119d083aeb60537fcfd..ced5562296ec28582028bc66b27595bc
      MRI = &MF.getRegInfo();
    }
 diff --git a/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp b/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp
-index 8eb20927fb8a088627d48b81ddaf415ffa7da72c..5f682325af35739bf5bb653c16012c83b69c68f6 100644
+index 2ccbceeda5907b0870277709210e5ff468f7a2f0..4bad5a19571afa0efed54e3207a131536ac340dd 100644
 --- a/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp
 +++ b/llvm/lib/Target/RISCV/RISCVFrameLowering.cpp
-@@ -2634,6 +2634,8 @@ bool RISCVFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
+@@ -2674,6 +2674,8 @@ bool RISCVFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
    case TargetStackID::SGPRSpill:
    case TargetStackID::WasmLocal:
    case TargetStackID::ScalablePredicateVector:
