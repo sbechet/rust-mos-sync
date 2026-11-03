@@ -94,7 +94,7 @@ index e62ad4287524860dab1a075b9356c589d0d64dd7..eb89959b419b4a98153c026ed9a2dcdf
          move_expr,
          move_ref_pattern,
 diff --git a/compiler/rustc_target/src/asm/mod.rs b/compiler/rustc_target/src/asm/mod.rs
-index 6f9751e8074908f0eb329d24d57ab0fb166ca18b..1b0eb7fcd45dc8436ab8dc36c262acd799dc9917 100644
+index 500010dc426f404749fb8a50fb0d715bae728bd1..1517c0cc1735ff74d151ea9de273074a79e8b7be 100644
 --- a/compiler/rustc_target/src/asm/mod.rs
 +++ b/compiler/rustc_target/src/asm/mod.rs
 @@ -281,7 +281,7 @@ pub fn from_arch(arch: &Arch) -> Option<Self> {
@@ -357,7 +357,7 @@ index 0000000000000000000000000000000000000000..6cbdc6132157b289acd0685e2bfd884e
 +    base::mos::target("unknown", "mos-clang", "MOS 6502, no platform")
 +}
 diff --git a/compiler/rustc_target/src/target_features.rs b/compiler/rustc_target/src/target_features.rs
-index 2ee7dea9f8af364ff5aa6dbf8af54436232bf43c..bef8fca94bb47305b4dcb8f3c436bb544dde4f36 100644
+index e8970ea57e822eeb64b36f2f90aefed8882134a6..da0e7eec89bcd2c4beff06a424b22cb63bea6a3d 100644
 --- a/compiler/rustc_target/src/target_features.rs
 +++ b/compiler/rustc_target/src/target_features.rs
 @@ -1195,7 +1195,7 @@ pub fn rust_target_features(&self) -> &'static [(&'static str, Stability, Implie
