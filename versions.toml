@@ -9,7 +9,7 @@ llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
 [rust.beta]
 # rust-lang/rust has no beta tags: beta is tracked by the `beta` branch head.
 tag = "1.100.0-beta"
-commit = "b0aaa0fca8a4b445972b94416341beb2e5fcecce"
+commit = "3b0202dcde0ac75d57351de7b10dfa396747bd5e"
 llvm_branch = "rustc/23.1-2026-07-22"
 llvm_commit = "0a5579eb649d3634a9c30ac873300cc2944fa070"
 
