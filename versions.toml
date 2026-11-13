@@ -2,9 +2,9 @@
 # Read and written only through scripts/lib.sh (ver_get / ver_set).
 
 [rust.stable]
-tag = "1.99.1"
+tag = "1.100.0"
 llvm_branch = "rustc/23.1-2026-07-22"
-llvm_commit = "1b9c0d5ff9bbe7634aead059efe6b11a7eeba145"
+llvm_commit = "0a5579eb649d3634a9c30ac873300cc2944fa070"
 
 [rust.beta]
 # rust-lang/rust has no beta tags: beta is tracked by the `beta` branch head.
