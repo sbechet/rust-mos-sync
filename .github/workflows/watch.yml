@@ -37,7 +37,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       HAVE_PAT: ${{ secrets.WORKFLOW_DISPATCH_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: detect.sh (full check)
         id: detect

@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # need main's history to branch off cleanly
 
@@ -210,7 +210,7 @@ jobs:
 
       - name: Logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sync-rust-${{ env.CHANNEL }}-logs
           path: |

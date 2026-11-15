@@ -48,7 +48,7 @@ jobs:
       versions_ref: ${{ steps.diff.outputs.versions_ref }}
       historic: ${{ steps.diff.outputs.historic }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
@@ -105,7 +105,7 @@ jobs:
     outputs:
       key: ${{ steps.key.outputs.key }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: versions.toml of the release being re-published
         if: needs.detect.outputs.versions_ref != ''
@@ -136,7 +136,7 @@ jobs:
 
       - name: Restore ccache
         if: steps.key.outputs.cached != 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
           key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -159,7 +159,7 @@ jobs:
 
       - name: Save ccache
         if: always() && steps.key.outputs.cached != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
           key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -182,7 +182,7 @@ jobs:
 
       - name: Hand LLVM to the rust job
         if: steps.key.outputs.cached != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: llvm-${{ matrix.channel }}
           path: work/${{ steps.key.outputs.asset }}
@@ -195,7 +195,7 @@ jobs:
 
       - name: Logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-llvm-logs-${{ matrix.channel }}
           path: |
@@ -211,7 +211,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: versions.toml of the release being re-published
         if: needs.detect.outputs.versions_ref != ''
@@ -226,7 +226,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -yq ninja-build pkg-config libssl-dev
 
       - name: LLVM from this run
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         continue-on-error: true
         with:
           name: llvm-${{ matrix.channel }}
@@ -323,7 +323,7 @@ jobs:
           fi
 
       - name: Upload toolchain for the docker job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: toolchain-${{ matrix.channel }}-x86_64-unknown-linux-gnu
           path: work/rust-mos-*.tar.xz
@@ -340,7 +340,7 @@ jobs:
 
       - name: Logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-rust-logs-${{ matrix.channel }}
           path: |
