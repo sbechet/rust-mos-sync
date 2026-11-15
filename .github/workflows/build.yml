@@ -52,7 +52,7 @@ jobs:
       key: ${{ steps.key.outputs.key }}
       cached: ${{ steps.key.outputs.cached }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache key
         id: key
@@ -77,7 +77,7 @@ jobs:
 
       - name: Restore ccache
         if: steps.key.outputs.cached != 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
           key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -101,7 +101,7 @@ jobs:
       # Saved even when the build fails, so the next attempt resumes from here.
       - name: Save ccache
         if: always() && steps.key.outputs.cached != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
           key: ccache-llvm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -124,7 +124,7 @@ jobs:
 
       - name: Hand LLVM to the rust job
         if: steps.key.outputs.cached != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: llvm
           path: work/${{ steps.key.outputs.asset }}
@@ -141,7 +141,7 @@ jobs:
 
       - name: Logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: llvm-logs
           path: |
@@ -153,7 +153,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Free disk space
         run: .github/free-disk.sh
@@ -163,7 +163,7 @@ jobs:
 
       - name: LLVM from this run
         if: needs.llvm.outputs.cached != 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: llvm
           path: llvm-dl
@@ -198,7 +198,7 @@ jobs:
 
       - name: Upload toolchain
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: toolchain-${{ env.CHANNEL }}-x86_64-unknown-linux-gnu
           path: work/rust-mos-*.tar.xz
@@ -208,7 +208,7 @@ jobs:
 
       - name: Logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rust-logs
           path: |
